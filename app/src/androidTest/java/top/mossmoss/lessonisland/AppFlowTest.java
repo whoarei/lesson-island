@@ -142,7 +142,7 @@ public class AppFlowTest extends InstrumentationTestCase {
   }
 
   Button findButton(String label) {
-    for (View v : views(app.body))
+    for (View v : views(app.shell))
       if (v instanceof Button b && b.getText().toString().equals(label) && b.isEnabled()) return b;
     return null;
   }
@@ -245,6 +245,8 @@ public class AppFlowTest extends InstrumentationTestCase {
           app.path("lesson1");
         });
     shot("02-learning-route");
+    ui(() -> app.scroll.scrollTo(0, app.dp(370)));
+    shot("02-learning-route-bend");
     ui(
         () -> {
           app.path("lesson1");
@@ -278,6 +280,16 @@ public class AppFlowTest extends InstrumentationTestCase {
             app.secrets = new Secrets(context);
             app.parent = false;
             app.home();
+          });
+      ui(
+          () -> {
+            Button create = findButton("家长创建课程");
+            assertNotNull(create);
+            Rect visible = new Rect();
+            assertTrue(
+                "Creation must be visible on first launch without scrolling",
+                create.getGlobalVisibleRect(visible));
+            assertTrue(visible.height() >= app.dp(48));
           });
       shot("00-empty-first-launch");
       click("家长创建课程");
@@ -454,6 +466,7 @@ public class AppFlowTest extends InstrumentationTestCase {
         String wrong = q.options.stream().filter(x -> !x.equals(q.answer)).findFirst().get();
         click(wrong);
         click("检查答案");
+        shot("05-gentle-feedback");
         assertEquals(app.activeQuestions.size() + 1, app.queue.length());
         assertEquals(0, app.sessionCorrect);
         assertTrue(app.store.due(true).size() > 0);
@@ -495,6 +508,12 @@ public class AppFlowTest extends InstrumentationTestCase {
         () -> {
           app.reviews();
           app.profile();
+        });
+    shot("09-growth-journal");
+    ui(() -> app.scroll.fullScroll(View.FOCUS_DOWN));
+    shot("09-growth-badges");
+    ui(
+        () -> {
           app.parent = true;
           app.dashboard();
         });
@@ -551,6 +570,93 @@ public class AppFlowTest extends InstrumentationTestCase {
                     new File(app.getApplicationInfo().dataDir, "shared_prefs/secure.xml").toPath()))
             .contains("temporary-test-secret"));
     secrets.set(originalSecret);
+  }
+
+  public void testAdventureRouteAndPinnedActionsAtNarrowWidth() throws Exception {
+    JSONObject course = fixture("test_adventure_layout");
+    ui(
+        () -> {
+          app.store.progress(course.getString("id")).put("completed", 1);
+          app.path(course.getString("id"));
+          // A 320dp phone viewport leaves 280dp for content after horizontal padding.
+          app.body.getLayoutParams().width = app.dp(320);
+          app.body.requestLayout();
+        });
+    ui(
+        () -> {
+          AdventureArt.Trail trail = null;
+          for (View view : views(app.body)) if (view instanceof AdventureArt.Trail t) trail = t;
+          assertNotNull(trail);
+          assertEquals(6, trail.getChildCount());
+          for (int i = 0; i < 6; i++) {
+            View tile = trail.getChildAt(i);
+            assertTrue(
+                "Stage must stay inside the narrow trail",
+                tile.getLeft() >= 0 && tile.getRight() <= trail.getWidth());
+            boolean hasAction = false;
+            for (View child : views(tile)) if (child instanceof Button) hasAction = true;
+            assertEquals("Only completed and next stages may be started", i <= 1, hasAction);
+          }
+          Button next = findButton("开始第 2 关");
+          assertNotNull(next);
+          Rect rect = new Rect();
+          next.getDrawingRect(rect);
+          next.requestRectangleOnScreen(rect, true);
+        });
+    shot("10-narrow-route");
+    click("开始第 2 关");
+    assertEquals("quiz", app.page);
+    ui(
+        () -> {
+          assertNotNull(app.actionFooter);
+          Button check = findButton("检查答案");
+          assertNotNull(check);
+          Rect rect = new Rect();
+          assertTrue(
+              "Check button must be visible without scrolling", check.getGlobalVisibleRect(rect));
+          assertTrue("Pinned action must have a full touch target", rect.height() >= app.dp(48));
+          assertEquals(app.actionFooter, check.getParent());
+          app.scroll.fullScroll(View.FOCUS_DOWN);
+        });
+    ui(
+        () -> {
+          Rect rect = new Rect();
+          assertTrue(findButton("检查答案").getGlobalVisibleRect(rect));
+          assertTrue(rect.height() >= app.dp(48));
+        });
+    shot("10-pinned-answer-action");
+    Learning.Question q = app.current();
+    click(q.answer);
+    click("检查答案");
+    ui(
+        () -> {
+          Button next = findButton(app.position >= app.queue.length() ? "完成本次学习  →" : "继续  →");
+          assertNotNull(next);
+          assertEquals(app.actionFooter, next.getParent());
+        });
+    shot("10-positive-feedback");
+    // Word tiles still wrap at the available width and remain inside their container.
+    ui(
+        () -> {
+          app.newSession(course.getString("id"), 4);
+          int index = 0;
+          while (!app.activeQuestions.get(index).type.equals("order")) index++;
+          app.position = index;
+          app.showQuestion();
+          app.body.getLayoutParams().width = app.dp(320);
+          app.body.requestLayout();
+        });
+    ui(
+        () -> {
+          MainActivity.TokenFlow flow = null;
+          for (View view : views(app.body)) if (view instanceof MainActivity.TokenFlow f) flow = f;
+          assertNotNull(flow);
+          for (int i = 0; i < flow.getChildCount(); i++) {
+            View token = flow.getChildAt(i);
+            assertTrue(token.getLeft() >= 0 && token.getRight() <= flow.getWidth());
+          }
+        });
+    shot("10-word-workshop");
   }
 
   public void testBackupValidationAndRestore() throws Exception {

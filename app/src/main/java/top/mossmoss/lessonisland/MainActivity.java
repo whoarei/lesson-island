@@ -20,24 +20,24 @@ import java.util.regex.*;
 import org.json.*;
 
 public final class MainActivity extends Activity {
-  static final int INK = Color.rgb(29, 50, 47),
-      MUTED = Color.rgb(111, 127, 121),
-      GREEN = Color.rgb(22, 125, 112),
-      BG = Color.rgb(247, 248, 245),
-      LINE = Color.rgb(226, 232, 225),
-      LIME = Color.rgb(219, 241, 185),
-      GOLD = Color.rgb(244, 198, 108);
+  static final int INK = AdventureArt.INK,
+      MUTED = Color.rgb(94, 115, 131),
+      GREEN = AdventureArt.TEAL,
+      BG = Color.rgb(247, 252, 255),
+      LINE = AdventureArt.LINE,
+      LIME = Color.rgb(235, 249, 215);
   Store store;
   Audio audio;
   Secrets secrets;
   AiClient ai;
   final ExecutorService jobs = Executors.newSingleThreadExecutor();
   boolean parent = false, busy = false, externalPending = false, relock = false;
-  LinearLayout shell, body, header, bottom;
+  LinearLayout shell, body, header, bottom, actionFooter;
   ScrollView scroll;
   String page = "home", selectedId = "", status = "";
   int materialTab = 0;
   TextView statusView;
+  Toast lastToast;
   EditText apiKeyInput;
   ImageButton apiKeyToggle;
   boolean apiKeyVisible;
@@ -92,7 +92,12 @@ public final class MainActivity extends Activity {
   }
 
   void toast(String text) {
-    runOnUiThread(() -> Toast.makeText(this, text, Toast.LENGTH_LONG).show());
+    runOnUiThread(
+        () -> {
+          if (lastToast != null) lastToast.cancel();
+          lastToast = Toast.makeText(this, text, Toast.LENGTH_LONG);
+          lastToast.show();
+        });
   }
 
   TextView text(String value, int size, int color, boolean bold) {
@@ -102,7 +107,7 @@ public final class MainActivity extends Activity {
     t.setTextColor(color);
     t.setFontFeatureSettings("kern");
     t.setLineSpacing(dp(3), 1f);
-    if (bold) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+    t.setTypeface(Typeface.create("sans-serif-rounded", bold ? Typeface.BOLD : Typeface.NORMAL));
     return t;
   }
 
@@ -127,8 +132,8 @@ public final class MainActivity extends Activity {
   }
 
   GradientDrawable outline(int color, int stroke) {
-    GradientDrawable d = shape(color, 16);
-    d.setStroke(dp(1), stroke);
+    GradientDrawable d = shape(color, 22);
+    d.setStroke(dp(1.5f), stroke);
     return d;
   }
 
@@ -143,7 +148,7 @@ public final class MainActivity extends Activity {
 
   TextView label(String value) {
     TextView t = text(value, 12, MUTED, true);
-    t.setLetterSpacing(.09f);
+    t.setLetterSpacing(.04f);
     return t;
   }
 
@@ -166,27 +171,49 @@ public final class MainActivity extends Activity {
     Button b = new Button(this);
     b.setText(label);
     b.setAllCaps(false);
-    b.setTextSize(15);
-    b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-    b.setTextColor(primary ? Color.WHITE : GREEN);
-    b.setMinHeight(dp(50));
-    b.setMinimumHeight(dp(50));
-    b.setPadding(dp(14), dp(9), dp(14), dp(9));
-    b.setBackground(primary ? shape(GREEN, 14) : outline(Color.WHITE, LINE));
+    b.setTextSize(16);
+    b.setTypeface(Typeface.create("sans-serif-rounded", Typeface.BOLD));
+    b.setTextColor(primary ? INK : GREEN);
+    b.setMinHeight(dp(56));
+    b.setMinimumHeight(dp(56));
+    b.setPadding(dp(14), dp(10), dp(14), dp(15));
+    b.setBackground(
+        new AdventureArt.Face(
+            this,
+            primary ? AdventureArt.LEAF : Color.WHITE,
+            primary ? AdventureArt.LEAF_EDGE : LINE,
+            18,
+            5));
     b.setStateListAnimator(null);
     b.setOnClickListener(v -> safe(action));
     return b;
   }
 
   void action(LinearLayout p, String label, boolean primary, Task task) {
+    if (page.equals("quiz") && primary) {
+      pinAction(label, task);
+      return;
+    }
     space(p, 10);
     add(p, button(label, primary, task));
+  }
+
+  void pinAction(String label, Task task) {
+    if (actionFooter == null) {
+      actionFooter = col();
+      actionFooter.setPadding(dp(20), dp(12), dp(20), dp(12));
+      actionFooter.setBackgroundColor(Color.WHITE);
+      shell.addView(
+          actionFooter, shell.indexOfChild(scroll) + 1, new LinearLayout.LayoutParams(-1, -2));
+    }
+    actionFooter.removeAllViews();
+    add(actionFooter, button(label, true, task));
   }
 
   LinearLayout card(LinearLayout target) {
     LinearLayout c = col();
     c.setPadding(dp(20), dp(20), dp(20), dp(20));
-    c.setBackground(outline(Color.WHITE, LINE));
+    c.setBackground(new AdventureArt.Face(this, Color.WHITE, LINE, 24, 3));
     LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
     lp.bottomMargin = dp(14);
     target.addView(c, lp);
@@ -197,7 +224,33 @@ public final class MainActivity extends Activity {
     row.addView(view, new LinearLayout.LayoutParams(0, -2, 1));
   }
 
+  void companion(LinearLayout target, String message, String mood) {
+    LinearLayout r = row();
+    r.addView(
+        new AdventureArt.Companion(this, mood, false),
+        new LinearLayout.LayoutParams(dp(88), dp(90)));
+    TextView bubble = text(message, 15, INK, true);
+    bubble.setPadding(dp(15), dp(13), dp(15), dp(13));
+    bubble.setBackground(outline(Color.WHITE, LINE));
+    weight(r, bubble);
+    add(target, r);
+    space(target, 12);
+  }
+
+  void iconTitle(LinearLayout target, String title, String icon, int background) {
+    LinearLayout r = row();
+    AdventureArt.Icon art = new AdventureArt.Icon(this, icon, GREEN);
+    art.setPadding(dp(7), dp(7), dp(7), dp(7));
+    art.setBackground(shape(background, 14));
+    r.addView(art, new LinearLayout.LayoutParams(dp(42), dp(42)));
+    TextView t = text(title, 21, INK, true);
+    t.setPadding(dp(12), 0, 0, 0);
+    weight(r, t);
+    add(target, r);
+  }
+
   void screen(String name, String title, boolean nav) {
+    if (lastToast != null) lastToast.cancel();
     setApiKeyVisible(false);
     if (apiKeyInput != null) apiKeyInput.setText("");
     apiKeyInput = null;
@@ -206,6 +259,7 @@ public final class MainActivity extends Activity {
     page = name;
     if (name.equals("quiz") && activeTick == 0) activeTick = SystemClock.elapsedRealtime();
     statusView = null;
+    actionFooter = null;
     answered = false;
     shell = col();
     shell.setBackgroundColor(BG);
@@ -220,11 +274,21 @@ public final class MainActivity extends Activity {
           return insets;
         });
     header = row();
-    header.setPadding(dp(22), dp(14), dp(22), dp(12));
-    TextView logo = text("◒  课文岛", 20, INK, true);
+    header.setPadding(dp(20), dp(10), dp(20), dp(10));
+    AdventureArt.Icon brand = new AdventureArt.Icon(this, "book", GREEN);
+    brand.setBackground(shape(LIME, 14));
+    brand.setPadding(dp(5), dp(5), dp(5), dp(5));
+    header.addView(brand, new LinearLayout.LayoutParams(dp(42), dp(42)));
+    LinearLayout logo = col();
+    logo.setPadding(dp(10), 0, dp(6), 0);
+    add(logo, text("课文岛", 21, INK, true));
+    TextView wordmark = text(parent ? "家长工作室" : "LESSON ISLAND", 9, MUTED, true);
+    wordmark.setLetterSpacing(.08f);
+    add(logo, wordmark);
     weight(header, logo);
     TextView toggle = pill(parent ? "返回学生" : "家长入口", GREEN, parent ? LIME : Color.WHITE);
     toggle.setMinHeight(dp(44));
+    toggle.setBackground(outline(parent ? LIME : Color.WHITE, LINE));
     toggle.setContentDescription("切换模式");
     toggle.setOnClickListener(
         v -> {
@@ -246,7 +310,7 @@ public final class MainActivity extends Activity {
     LinearLayout outer = col();
     outer.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
     body = new ContentLayout(this);
-    body.setPadding(dp(22), dp(16), dp(22), dp(20));
+    body.setPadding(dp(20), dp(12), dp(20), dp(28));
     outer.addView(body, new LinearLayout.LayoutParams(-1, -2));
     scroll.addView(outer);
     shell.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -261,7 +325,7 @@ public final class MainActivity extends Activity {
     if (nav) {
       bottom = row();
       bottom.setBackgroundColor(Color.WHITE);
-      bottom.setPadding(dp(14), dp(8), dp(14), dp(8));
+      bottom.setPadding(dp(10), dp(7), dp(10), dp(7));
       String[] names =
           parent ? new String[] {"学习概览", "课程工作台", "家长设置"} : new String[] {"学习岛", "复习站", "我的成长"};
       for (int i = 0; i < 3; i++) {
@@ -274,15 +338,25 @@ public final class MainActivity extends Activity {
                 : (i == 0 && name.equals("home")
                     || i == 1 && name.equals("reviews")
                     || i == 2 && name.equals("profile"));
-        TextView tab =
-            text(
-                (i == 0 ? "◈  " : i == 1 ? "↻  " : "◉  ") + names[i],
-                13,
-                current ? GREEN : MUTED,
-                current);
-        tab.setMinHeight(dp(48));
+        LinearLayout tab = col();
         tab.setGravity(Gravity.CENTER);
-        if (current) tab.setBackground(shape(Color.rgb(237, 245, 232), 14));
+        tab.setPadding(dp(3), dp(3), dp(3), dp(3));
+        tab.setMinimumHeight(dp(62));
+        String[] icons =
+            parent
+                ? new String[] {"dashboard", "courses", "settings"}
+                : new String[] {"home", "review", "profile"};
+        tab.addView(
+            new AdventureArt.Icon(this, icons[i], current ? GREEN : MUTED),
+            new LinearLayout.LayoutParams(dp(30), dp(30)));
+        TextView tabLabel = text(names[i], 12, current ? GREEN : MUTED, true);
+        tabLabel.setGravity(Gravity.CENTER);
+        add(tab, tabLabel);
+        tab.setContentDescription(names[i]);
+        tab.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        tab.setFocusable(true);
+        tab.setSelected(current);
+        if (current) tab.setBackground(shape(LIME, 18));
         tab.setOnClickListener(
             v ->
                 safe(
@@ -328,27 +402,29 @@ public final class MainActivity extends Activity {
             emptyHome();
             return;
           }
-          add(body, label("YOUR LITTLE ENGLISH ADVENTURE"));
+          add(body, label("今日冒险  /  LET’S EXPLORE"));
           space(body, 9);
-          heading("你好，" + store.state.optString("name", "探索家"), "今天也去课文里，发现一点新世界。");
+          heading("你好，" + store.state.optString("name", "探索家") + "！", "芽芽已经准备好，和你一起出发啦。");
           LinearLayout hero = card(body);
-          hero.setBackground(shape(GREEN, 24));
+          hero.setBackground(
+              new AdventureArt.Face(this, AdventureArt.SKY, Color.rgb(192, 225, 240), 26, 4));
           LinearLayout r = row(), left = col();
           weight(r, left);
-          add(left, text("小小练习\n大大进步", 26, Color.WHITE, true));
-          space(left, 10);
-          add(left, text("听懂 · 读懂 · 记得住", 13, Color.rgb(199, 229, 216), false));
-          r.addView(new IslandView(this), new LinearLayout.LayoutParams(dp(116), dp(130)));
+          add(left, text("芽芽的探险邀请", 12, GREEN, true));
+          space(left, 8);
+          add(left, text("一起去\n课文里探险！", 23, INK, true));
+          space(left, 8);
+          add(left, text("一小关，一点新发现。", 12, MUTED, false));
+          r.addView(
+              new AdventureArt.Companion(this, "wave", true),
+              new LinearLayout.LayoutParams(dp(112), dp(132)));
           add(hero, r);
           space(hero, 14);
           LinearLayout meta = row();
-          weight(meta, pill("✦  " + store.state.optInt("xp") + " XP", INK, LIME));
+          weight(meta, pill("✦  " + store.state.optInt("xp") + " XP", INK, Color.WHITE));
           View gap = new View(this);
           meta.addView(gap, new LinearLayout.LayoutParams(dp(12), 1));
-          weight(
-              meta,
-              pill(
-                  "↻  " + store.due(false).size() + " 项待复习", Color.WHITE, Color.rgb(40, 144, 128)));
+          weight(meta, pill("↻  " + store.due(false).size() + " 项待复习", GREEN, Color.WHITE));
           add(hero, meta);
           JSONObject pending = store.state.optJSONObject("session");
           if (pending != null) {
@@ -356,7 +432,7 @@ public final class MainActivity extends Activity {
             space(body, 18);
           }
           LinearLayout title = row();
-          weight(title, text("我的课文", 21, INK, true));
+          weight(title, text("选择你的学习岛", 21, INK, true));
           title.addView(pill(store.courses(true).size() + " 个学习岛", MUTED, Color.WHITE));
           add(body, title);
           space(body, 14);
@@ -365,8 +441,24 @@ public final class MainActivity extends Activity {
             final String id = c.getString("id");
             int done = store.progress(id).optInt("completed");
             LinearLayout box = card(body);
+            box.setOnClickListener(v -> safe(() -> path(id)));
+            box.setFocusable(true);
+            box.setContentDescription(c.getString("title") + "，已点亮 " + done + " / 6 关，打开学习路线");
+            box.setForeground(
+                new android.graphics.drawable.RippleDrawable(
+                    ColorStateList.valueOf(Color.argb(30, 12, 119, 99)),
+                    null,
+                    shape(Color.WHITE, 24)));
             LinearLayout top = row();
-            weight(top, label("ISLAND  " + String.format(Locale.ROOT, "%02d", ++n)));
+            int islandNumber = ++n;
+            AdventureArt.Icon island =
+                new AdventureArt.Icon(this, done == 6 ? "trophy" : "book", GREEN);
+            island.setBackground(shape(islandNumber % 2 == 0 ? AdventureArt.LILAC : LIME, 16));
+            island.setPadding(dp(7), dp(7), dp(7), dp(7));
+            top.addView(island, new LinearLayout.LayoutParams(dp(44), dp(44)));
+            TextView islandLabel = label("小岛 " + String.format(Locale.ROOT, "%02d", islandNumber));
+            islandLabel.setPadding(dp(10), 0, 0, 0);
+            weight(top, islandLabel);
             top.addView(
                 pill(
                     done == 6 ? "已通关" : done > 0 ? "探索中" : "准备出发",
@@ -389,6 +481,8 @@ public final class MainActivity extends Activity {
                     MUTED,
                     false));
             space(box, 13);
+            add(box, text("已点亮 " + done + " / 6 关", 12, GREEN, true));
+            space(box, 7);
             progressBar(box, done, 6);
             action(
                 box,
@@ -403,20 +497,35 @@ public final class MainActivity extends Activity {
 
   void emptyHome() throws Exception {
     boolean hasDrafts = !store.courses(false).isEmpty();
-    add(body, label("WELCOME TO LESSON ISLAND"));
+    add(body, label("欢迎登岛  /  WELCOME ABOARD"));
     space(body, 9);
     heading(
         hasDrafts ? "课程正在准备中" : "从第一篇课文开始", hasDrafts ? "家长发布课程后，孩子就可以开始闯关。" : "请家长先创建课程，再交给孩子学习。");
     LinearLayout welcome = card(body);
-    welcome.setBackground(shape(Color.rgb(237, 245, 232), 24));
-    add(welcome, text(hasDrafts ? "还有一步，就能开始学习" : "把课文图片变成学习课程", 22, INK, true));
-    space(welcome, 12);
-    add(welcome, text("1. 选择课文图片\n2. 生成并校对课文、翻译和音频\n3. 发布课程，开始六关学习", 15, MUTED, false));
-    action(
-        welcome,
+    welcome.setBackground(
+        new AdventureArt.Face(this, AdventureArt.SKY, Color.rgb(192, 225, 240), 26, 4));
+    welcome.addView(
+        new AdventureArt.Companion(this, "wave", true), new LinearLayout.LayoutParams(-1, dp(135)));
+    TextView greeting = text("芽芽在岛上等你！", 16, GREEN, true);
+    greeting.setGravity(Gravity.CENTER);
+    add(welcome, greeting);
+    space(welcome, 18);
+    add(welcome, text(hasDrafts ? "发布课程，就能出发" : "课文图片 → 你的学习岛", 19, INK, true));
+    pinAction(
         hasDrafts ? "家长管理课程" : "家长创建课程",
-        true,
         () -> gate(hasDrafts ? this::courses : this::importScreen));
+    space(welcome, 18);
+    String[] steps = {"选择课文图片", "生成并校对课文、翻译和音频", "发布课程，开启六关冒险"};
+    for (int i = 0; i < steps.length; i++) {
+      LinearLayout step = row();
+      TextView number = pill(String.valueOf(i + 1), GREEN, Color.WHITE);
+      step.addView(number, new LinearLayout.LayoutParams(dp(34), dp(34)));
+      TextView copy = text(steps[i], 14, INK, false);
+      copy.setPadding(dp(10), 0, 0, 0);
+      weight(step, copy);
+      add(welcome, step);
+      space(welcome, 9);
+    }
     space(welcome, 10);
     add(welcome, text("进入家长模式需要验证 PIN，首次使用时由家长设置。", 12, MUTED, false));
     if (!secrets.hasPin()) {
@@ -427,7 +536,9 @@ public final class MainActivity extends Activity {
 
   void empty(String title, String subtitle) {
     LinearLayout c = card(body);
-    add(c, text("◒", 44, GREEN, true));
+    c.addView(
+        new AdventureArt.Companion(this, "think", false),
+        new LinearLayout.LayoutParams(-1, dp(110)));
     space(c, 10);
     add(c, text(title, 20, INK, true));
     space(c, 8);
@@ -435,12 +546,7 @@ public final class MainActivity extends Activity {
   }
 
   void progressBar(LinearLayout p, int value, int max) {
-    ProgressBar b = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-    b.setMax(max);
-    b.setProgress(value);
-    b.setProgressTintList(ColorStateList.valueOf(GREEN));
-    b.setProgressBackgroundTintList(ColorStateList.valueOf(LINE));
-    p.addView(b, new LinearLayout.LayoutParams(-1, dp(7)));
+    p.addView(new AdventureArt.Meter(this, value, max), new LinearLayout.LayoutParams(-1, dp(14)));
   }
 
   void path(String id) throws Exception {
@@ -448,40 +554,67 @@ public final class MainActivity extends Activity {
     JSONObject c = store.course(id);
     if (!c.optBoolean("published")) throw new Exception("这门课还没有发布");
     screen("path", "我的课文", false);
-    add(body, label("LEARNING JOURNEY"));
-    space(body, 10);
-    heading(c.getString("title"), c.optString("subtitle"));
-    LinearLayout intro = card(body);
-    add(intro, text("一座岛，六次小冒险", 19, INK, true));
-    space(intro, 6);
-    add(intro, text("依次完成关卡即可解锁下一关。答错也没关系，纠正后再试一次。", 14, MUTED, false));
-    action(intro, "打开课文与重点素材", false, () -> materials(id, false));
     int done = store.progress(id).optInt("completed");
+    LinearLayout journeyHead = row(), courseCopy = col();
+    add(courseCopy, label(done == 6 ? "小岛全部点亮！" : "芽芽陪你闯六关"));
+    space(courseCopy, 6);
+    add(courseCopy, text(c.getString("title"), 24, INK, true));
+    add(courseCopy, text(c.optString("subtitle"), 13, MUTED, false));
+    weight(journeyHead, courseCopy);
+    journeyHead.addView(
+        new AdventureArt.Companion(this, done == 6 ? "celebrate" : "wave", false),
+        new LinearLayout.LayoutParams(dp(82), dp(92)));
+    add(body, journeyHead);
+    space(body, 14);
+    LinearLayout intro = card(body);
+    intro.setPadding(dp(14), dp(12), dp(14), dp(15));
+    intro.setBackground(new AdventureArt.Face(this, LIME, Color.rgb(205, 227, 178), 24, 3));
+    LinearLayout status = row();
+    weight(status, text("已点亮 " + done + " / 6 关", 14, GREEN, true));
+    Button materialsButton = button("课文与重点素材  ›", false, () -> materials(id, false));
+    materialsButton.setTextSize(12);
+    materialsButton.setMinHeight(dp(48));
+    materialsButton.setMinimumHeight(dp(48));
+    materialsButton.setPadding(dp(10), dp(7), dp(10), dp(11));
+    status.addView(materialsButton);
+    add(intro, status);
+    space(intro, 10);
+    progressBar(intro, done, 6);
+    AdventureArt.Trail trail = new AdventureArt.Trail(this, done);
+    String[] icons = {"book", "leaf", "puzzle", "listen", "write", "trophy"};
+    String[] hints = {"听一句，读一句", "和新单词交朋友", "把表达装进口袋", "听声音，找答案", "动手拼出句子", "读懂故事的秘密"};
     for (int i = 0; i < 6; i++) {
       int stage = i;
       boolean locked = i > done;
-      LinearLayout box = card(body);
-      LinearLayout r = row();
-      TextView node =
-          pill(
-              i < done ? "✓" : String.valueOf(i + 1), locked ? MUTED : GREEN, i < done ? LIME : BG);
-      node.setMinWidth(dp(48));
-      node.setMinHeight(dp(48));
-      r.addView(node);
-      LinearLayout copy = col();
-      copy.setPadding(dp(16), 0, 0, 0);
-      weight(r, copy);
-      add(copy, text(Learning.STAGES[i], 19, locked ? MUTED : INK, true));
-      space(copy, 3);
-      add(copy, text(Learning.HINTS[i], 12, MUTED, false));
-      add(box, r);
+      LinearLayout box = col();
+      box.setGravity(Gravity.CENTER_HORIZONTAL);
+      AdventureArt.StageNode node =
+          new AdventureArt.StageNode(this, icons[i], locked ? 0 : i < done ? 2 : 1);
+      if (!locked) {
+        node.setOnClickListener(v -> safe(() -> begin(id, stage)));
+        node.setFocusable(true);
+        node.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        node.setContentDescription(
+            "第 " + (i + 1) + " 关，" + Learning.STAGES[i] + (i < done ? "，再练一次" : "，开始学习"));
+      }
+      box.addView(node, new LinearLayout.LayoutParams(dp(88), dp(88)));
+      TextView stageTitle =
+          text((i + 1) + ". " + Learning.STAGES[i], 17, locked ? MUTED : INK, true);
+      stageTitle.setGravity(Gravity.CENTER);
+      stageTitle.setBackground(shape(BG, 10));
+      add(box, stageTitle);
+      TextView hint = text(locked ? "完成上一关解锁" : hints[i], 12, MUTED, false);
+      hint.setGravity(Gravity.CENTER);
+      hint.setBackground(shape(BG, 8));
+      add(box, hint);
       if (locked) {
-        space(box, 12);
-        add(box, text("完成上一关后解锁", 12, MUTED, false));
+        box.setContentDescription("第 " + (i + 1) + " 关，" + Learning.STAGES[i] + "，尚未解锁");
       } else
-        action(
-            box, i < done ? "再练一次" : "开始第 " + (i + 1) + " 关  →", i == done, () -> begin(id, stage));
+        action(box, i < done ? "再练一次" : "开始第 " + (i + 1) + " 关", i == done, () -> begin(id, stage));
+      trail.addView(box);
     }
+    add(body, trail);
+    companion(body, "一步一步来，终点的宝藏是读懂整篇课文！", "think");
   }
 
   void begin(String id, int stage) throws Exception {
@@ -628,23 +761,46 @@ public final class MainActivity extends Activity {
             12,
             MUTED,
             false));
-    space(body, 24);
+    space(body, 18);
     String hint =
         switch (q.type) {
-          case "read" -> "READ & LISTEN  ·  听读课文";
-          case "listen" -> "LISTEN CLOSELY  ·  听力选择";
-          case "dictation" -> "SPELL IT OUT  ·  听音拼写";
-          case "order" -> "BUILD A SENTENCE  ·  连词成句";
-          case "flash" -> "LEARN A PHRASE  ·  表达积累";
-          default -> "CHOOSE THE MEANING  ·  选出正确答案";
+          case "read" -> "听一听，再读出来";
+          case "listen" -> "竖起耳朵，听力寻宝";
+          case "dictation" -> "听到的单词，写下来";
+          case "order" -> "搭词块，造句子";
+          case "flash" -> "收集一个新表达";
+          default -> "找一找，哪个意思对？";
         };
-    add(body, label(hint));
-    space(body, 14);
-    add(body, text(q.prompt, q.type.equals("read") ? 27 : 24, INK, true));
-    space(body, 18);
+    LinearLayout prompt = card(body);
+    prompt.setBackground(
+        new AdventureArt.Face(
+            this,
+            q.type.equals("listen") || q.type.equals("dictation") ? AdventureArt.SKY : Color.WHITE,
+            LINE,
+            24,
+            3));
+    LinearLayout promptTop = row();
+    promptTop.addView(
+        new AdventureArt.Companion(this, "think", false),
+        new LinearLayout.LayoutParams(dp(62), dp(64)));
+    TextView challenge = text(hint, 16, GREEN, true);
+    challenge.setPadding(dp(8), 0, 0, 0);
+    weight(promptTop, challenge);
+    add(prompt, promptTop);
+    space(prompt, 8);
+    add(prompt, text(q.prompt, q.type.equals("read") ? 26 : 23, INK, true));
+    space(body, 4);
     if (!q.audio.isEmpty()) {
       LinearLayout controls = row();
-      weight(controls, button("▶  听一遍", false, () -> audio.play(q.audio, this::toast)));
+      weight(
+          controls,
+          button(
+              "▶  听一遍",
+              false,
+              () -> {
+                audio.setSpeed(1f);
+                audio.play(q.audio, this::toast);
+              }));
       View gap = new View(this);
       controls.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
       weight(
@@ -749,9 +905,12 @@ public final class MainActivity extends Activity {
                       for (int i = 0; i < body.getChildCount(); i++) {
                         View child = body.getChildAt(i);
                         if (child instanceof Button && "option".equals(child.getTag()))
-                          child.setBackground(outline(Color.WHITE, LINE));
+                          child.setBackground(
+                              new AdventureArt.Face(this, Color.WHITE, LINE, 18, 4));
                       }
-                      b.setBackground(outline(Color.rgb(232, 244, 231), GREEN));
+                      b.setBackground(
+                          new AdventureArt.Face(
+                              this, AdventureArt.SKY, Color.rgb(100, 178, 212), 18, 4));
                     }));
         b.setTag("option");
         space(body, 10);
@@ -799,10 +958,21 @@ public final class MainActivity extends Activity {
     position++;
     saveSession();
     LinearLayout feedback = card(body);
-    feedback.setBackground(shape(ok ? Color.rgb(234, 245, 219) : Color.rgb(255, 240, 219), 20));
-    add(
-        feedback,
-        text(ok ? "✓  做得好！" : "再看一眼，你可以的", 22, ok ? GREEN : Color.rgb(166, 101, 30), true));
+    feedback.setBackground(
+        new AdventureArt.Face(
+            this,
+            ok ? LIME : AdventureArt.PEACH,
+            ok ? Color.rgb(193, 222, 158) : Color.rgb(237, 207, 165),
+            24,
+            4));
+    LinearLayout feedbackTop = row();
+    feedbackTop.addView(
+        new AdventureArt.Companion(this, ok ? "celebrate" : "think", false),
+        new LinearLayout.LayoutParams(dp(76), dp(78)));
+    weight(
+        feedbackTop,
+        text(ok ? "太棒啦，找到答案！" : "再试试，我陪着你", 21, ok ? GREEN : Color.rgb(144, 88, 34), true));
+    add(feedback, feedbackTop);
     space(feedback, 9);
     add(feedback, text((ok ? "" : "正确答案：\n") + q.answer, 19, INK, true));
     if (!q.explanation.isEmpty()) {
@@ -821,6 +991,11 @@ public final class MainActivity extends Activity {
           if (position >= queue.length()) finishSession();
           else showQuestion();
         });
+    if (android.animation.ValueAnimator.areAnimatorsEnabled()) {
+      feedback.setAlpha(0);
+      feedback.setTranslationY(dp(16));
+      feedback.animate().alpha(1).translationY(0).setDuration(240).start();
+    }
     scroll.post(() -> scroll.smoothScrollTo(0, body.getBottom()));
   }
 
@@ -847,32 +1022,45 @@ public final class MainActivity extends Activity {
     } else
       fresh = store.complete(sessionCourse, sessionStage, sessionAttempts, sessionCorrect, seconds);
     screen("result", "返回学习岛", false);
-    space(body, 28);
-    body.addView(new IslandView(this), new LinearLayout.LayoutParams(-1, dp(160)));
-    space(body, 24);
-    heading(
-        reviewing ? "记忆又牢固了一点！" : "又点亮了一段旅程！",
-        reviewing ? "今天的复习完成了，下一次再见。" : "你完成了「" + Learning.STAGES[sessionStage] + "」");
-    LinearLayout c = card(body);
-    add(c, text(fresh ? "✦  +20 XP" : "✦  练习完成", 29, GREEN, true));
-    space(c, 14);
-    add(
-        c,
+    space(body, 4);
+    LinearLayout celebration = card(body);
+    celebration.setBackground(
+        new AdventureArt.Face(this, AdventureArt.SKY, Color.rgb(192, 225, 240), 28, 4));
+    TextView ribbon = pill(reviewing ? "今日温习完成" : "冒险任务完成", GREEN, Color.WHITE);
+    add(celebration, ribbon);
+    celebration.addView(
+        new AdventureArt.Companion(this, "celebrate", true),
+        new LinearLayout.LayoutParams(-1, dp(145)));
+    TextView resultTitle = text(reviewing ? "记忆又牢固了一点！" : "又点亮了一段旅程！", 24, INK, true);
+    resultTitle.setGravity(Gravity.CENTER);
+    add(celebration, resultTitle);
+    space(celebration, 8);
+    TextView detail =
         text(
-            "作答 "
-                + sessionAttempts
-                + " 次  ·  正确率 "
-                + Learning.accuracy(sessionCorrect, sessionAttempts)
-                + "%",
-            16,
-            INK,
-            true));
-    space(c, 8);
-    add(c, text("已安排后续复习：1、3、7、14、30 天。", 13, MUTED, false));
-    action(
-        body,
+            reviewing ? "今天的复习完成了，下一次再见。" : "你完成了「" + Learning.STAGES[sessionStage] + "」",
+            14,
+            MUTED,
+            false);
+    detail.setGravity(Gravity.CENTER);
+    add(celebration, detail);
+    space(celebration, 20);
+    LinearLayout rewards = row();
+    weight(rewards, pill(fresh ? "✦  +20 XP" : "✓  练习完成", GREEN, Color.WHITE));
+    View gap = new View(this);
+    rewards.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
+    weight(
+        rewards,
+        pill(
+            "正确率 " + Learning.accuracy(sessionCorrect, sessionAttempts) + "%", GREEN, Color.WHITE));
+    add(celebration, rewards);
+    space(celebration, 12);
+    TextView count = text("认真作答 " + sessionAttempts + " 次，每一步都算数。", 13, MUTED, false);
+    count.setGravity(Gravity.CENTER);
+    add(celebration, count);
+    space(body, 4);
+    companion(body, "歇一歇也没关系。接下来，我会在复习站等你！", "wave");
+    pinAction(
         reviewing ? "返回复习站" : "查看学习路线  →",
-        true,
         () -> {
           if (reviewing) reviews();
           else path(sessionCourse);
@@ -881,20 +1069,30 @@ public final class MainActivity extends Activity {
 
   void reviews() throws Exception {
     screen("reviews", "", true);
-    add(body, label("LITTLE STEPS, LASTING MEMORIES"));
+    add(body, label("记忆花园  /  GROW YOUR MEMORY"));
     space(body, 9);
-    heading("复习站", "把学过的内容，慢慢变成自己的。 ");
+    heading("来给记忆浇浇水", "每次温习，都让学过的知识长得更牢。");
     List<JSONObject> due = store.due(false);
     LinearLayout hero = card(body);
-    hero.setBackground(shape(Color.rgb(237, 241, 224), 22));
-    add(hero, text(String.valueOf(due.size()), 48, GREEN, true));
-    add(hero, text("项内容等待温习", 16, INK, true));
+    hero.setBackground(new AdventureArt.Face(this, LIME, Color.rgb(205, 227, 178), 26, 4));
+    LinearLayout reviewTop = row(), reviewCopy = col();
+    add(reviewCopy, pill("今日温习", GREEN, Color.WHITE));
+    space(reviewCopy, 8);
+    add(reviewCopy, text(String.valueOf(due.size()), 48, GREEN, true));
+    add(reviewCopy, text("项记忆等你唤醒", 16, INK, true));
+    weight(reviewTop, reviewCopy);
+    reviewTop.addView(
+        new AdventureArt.Companion(this, due.isEmpty() ? "celebrate" : "think", true),
+        new LinearLayout.LayoutParams(dp(130), dp(150)));
+    add(hero, reviewTop);
     space(hero, 8);
     add(hero, text("错题及时再练；答对的内容按记忆间隔回来。", 13, MUTED, false));
     if (!due.isEmpty()) action(hero, "开始今日复习  →", true, () -> startReview(false));
     if (!store.due(true).isEmpty()) action(hero, "只练错题", false, () -> startReview(true));
-    if (due.isEmpty()) empty("今天的记忆电量很满", "去学习新课文，或者打开素材听一听吧。");
-    else {
+    if (due.isEmpty()) {
+      companion(body, "今天没有到期的复习，记忆花园状态很好！", "celebrate");
+      action(body, "去学习岛探险  →", true, this::home);
+    } else {
       add(body, text("本次将复习", 19, INK, true));
       space(body, 12);
       for (JSONObject q : due.subList(0, Math.min(12, due.size()))) {
@@ -967,13 +1165,23 @@ public final class MainActivity extends Activity {
 
   void profile() throws Exception {
     screen("profile", "", true);
-    heading("每一点进步，都算数", "这是 " + store.state.optString("name") + " 的成长记录。");
+    add(body, label("我的成长  /  LITTLE WINS"));
+    space(body, 8);
+    heading("每一点进步，都算数", "这是 " + store.state.optString("name") + " 的冒险手账。");
     LinearLayout c = card(body);
-    add(c, text("✦  " + store.state.optInt("xp") + " XP", 36, GREEN, true));
-    space(c, 8);
-    add(c, text("已探索 " + completedCount() + " 个关卡", 17, INK, true));
-    space(c, 8);
-    add(c, text("已坚持学习 " + studyDays() + " 天", 14, MUTED, false));
+    c.setBackground(
+        new AdventureArt.Face(this, AdventureArt.LILAC, Color.rgb(214, 205, 241), 26, 4));
+    LinearLayout growthTop = row(), growthCopy = col();
+    add(growthCopy, pill("我的探险能量", GREEN, Color.WHITE));
+    space(growthCopy, 10);
+    add(growthCopy, text(store.state.optInt("xp") + " XP", 32, GREEN, true));
+    space(growthCopy, 8);
+    add(growthCopy, text("点亮 " + completedCount() + " 关\n学习 " + studyDays() + " 天", 15, INK, true));
+    weight(growthTop, growthCopy);
+    growthTop.addView(
+        new AdventureArt.Companion(this, "celebrate", false),
+        new LinearLayout.LayoutParams(dp(118), dp(148)));
+    add(c, growthTop);
     action(
         c,
         "修改我的昵称",
@@ -999,9 +1207,38 @@ public final class MainActivity extends Activity {
               .setNegativeButton("取消", null)
               .show();
         });
+    iconTitle(body, "我的冒险徽章", "trophy", AdventureArt.PEACH);
+    space(body, 12);
+    LinearLayout badges = row();
+    String[] badgeNames = {"初次出发", "点亮一座岛", "三日足迹"};
+    String[] badgeHints = {"完成 1 关", "完成一篇课文", "学习 3 天"};
+    boolean clearedIsland = false;
+    for (JSONObject course : store.courses(false))
+      clearedIsland |= store.progress(course.getString("id")).optInt("completed") >= 6;
+    boolean[] earned = {completedCount() >= 1, clearedIsland, studyDays() >= 3};
+    for (int i = 0; i < 3; i++) {
+      LinearLayout badge = col();
+      badge.setGravity(Gravity.CENTER);
+      badge.setPadding(dp(3), dp(12), dp(3), dp(12));
+      AdventureArt.Icon badgeArt =
+          new AdventureArt.Icon(
+              this, i == 2 ? "leaf" : "trophy", earned[i] ? GREEN : Color.rgb(139, 161, 175));
+      badgeArt.setPadding(dp(8), dp(8), dp(8), dp(8));
+      badgeArt.setBackground(shape(earned[i] ? AdventureArt.PEACH : Color.rgb(235, 242, 246), 20));
+      badge.addView(badgeArt, new LinearLayout.LayoutParams(dp(60), dp(60)));
+      TextView name = text(badgeNames[i], 13, INK, true);
+      name.setGravity(Gravity.CENTER);
+      add(badge, name);
+      TextView hint = text(earned[i] ? "已获得" : badgeHints[i], 10, MUTED, false);
+      hint.setGravity(Gravity.CENTER);
+      add(badge, hint);
+      weight(badges, badge);
+    }
+    add(body, badges);
+    space(body, 18);
     int minutes = todaySeconds() / 60;
     LinearLayout goal = card(body);
-    add(goal, text("今日小目标", 20, INK, true));
+    iconTitle(goal, "今日小目标", "leaf", LIME);
     space(goal, 8);
     add(goal, text(minutes + " / " + store.state.optInt("goal", 10) + " 分钟", 16, GREEN, true));
     space(goal, 10);
@@ -2364,6 +2601,7 @@ public final class MainActivity extends Activity {
 
   @Override
   protected void onDestroy() {
+    if (lastToast != null) lastToast.cancel();
     if (audio != null) audio.close();
     jobs.shutdownNow();
     super.onDestroy();
@@ -2428,63 +2666,6 @@ public final class MainActivity extends Activity {
         x += w + gap;
         rowHeight = Math.max(rowHeight, h);
       }
-    }
-  }
-
-  static final class IslandView extends View {
-    final Paint paint = new Paint(3);
-    final Path path = new Path();
-
-    IslandView(Context c) {
-      super(c);
-      setContentDescription("漂浮在海面上的书本学习岛");
-    }
-
-    void fill(Canvas c, int color, float left, float top, float right, float bottom, float radius) {
-      paint.setColor(color);
-      c.drawRoundRect(left, top, right, bottom, radius, radius, paint);
-    }
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-      super.onDraw(canvas);
-      canvas.save();
-      canvas.translate((getWidth() - getHeight() * .9f) / 2, 0);
-      float s = getHeight() / 160f;
-      canvas.scale(s, s);
-      paint.setColor(Color.rgb(75, 161, 136));
-      canvas.drawOval(7, 124, 140, 149, paint);
-      paint.setColor(LIME);
-      path.reset();
-      path.moveTo(12, 120);
-      path.cubicTo(45, 86, 106, 87, 137, 120);
-      path.lineTo(112, 137);
-      path.lineTo(34, 137);
-      path.close();
-      canvas.drawPath(path, paint);
-      paint.setColor(GOLD);
-      canvas.drawCircle(112, 32, 16, paint);
-      paint.setColor(Color.WHITE);
-      path.reset();
-      path.moveTo(29, 50);
-      path.quadTo(52, 44, 74, 58);
-      path.quadTo(98, 44, 121, 50);
-      path.lineTo(121, 104);
-      path.quadTo(97, 98, 74, 116);
-      path.quadTo(53, 99, 29, 104);
-      path.close();
-      canvas.drawPath(path, paint);
-      paint.setColor(Color.rgb(160, 199, 171));
-      paint.setStrokeWidth(2);
-      canvas.drawLine(74, 59, 74, 111, paint);
-      for (int i = 0; i < 3; i++) {
-        canvas.drawLine(39, 64 + i * 11, 63, 69 + i * 11, paint);
-        canvas.drawLine(86, 69 + i * 11, 111, 64 + i * 11, paint);
-      }
-      paint.setColor(LIME);
-      canvas.drawCircle(24, 27, 4, paint);
-      canvas.drawCircle(130, 72, 3, paint);
-      canvas.restore();
     }
   }
 }

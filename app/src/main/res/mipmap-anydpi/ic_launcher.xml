@@ -1,0 +1,6 @@
+<!-- The monochrome layer is supplied by the Android 13 (v33) resource. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools" tools:ignore="MonochromeLauncherIcon">
+    <background android:drawable="@color/icon_sky" />
+    <foreground android:drawable="@drawable/ic_island" />
+</adaptive-icon>
