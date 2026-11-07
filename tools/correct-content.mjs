@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-const folder='app/src/main/assets/courses/';
+const folder='app/src/androidTest/assets/fixtures/courses/';
 const a=JSON.parse(await fs.readFile(folder+'lesson1.json','utf8'));
 const additions=[['blue','蓝色','/bluː/'],['black','黑色','/blæk/'],['red','红色','/red/'],['yellow','黄色','/ˈjeləʊ/'],['green','绿色','/ɡriːn/'],['know','知道；了解','/nəʊ/']];
 for(const [en,zh,phonetic]of additions)if(!a.vocabulary.some(x=>x.en===en))a.vocabulary.push({en,zh,phonetic,kind:'word',note:en==='know'?'know about 表示“了解”。':'用来描述事物的颜色。'});

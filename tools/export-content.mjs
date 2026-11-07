@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-const source='app/src/main/assets';
+const source='app/src/androidTest/assets/fixtures';
 const target='deliverables/课程素材';
 await fs.mkdir(target,{recursive:true});
 await fs.cp(source+'/courses',target+'/courses',{recursive:true});

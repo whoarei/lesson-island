@@ -1,56 +1,40 @@
-课文岛 · Lesson Island 0.1.0 — 首个版本验证
+课文岛 · Lesson Island 0.1.1 — 示例隔离与制课入口修复
 验证日期：2026-11-07（北京时间）
 
-正式标识
-中文名称：课文岛
-英文名称：Lesson Island
-Android 包名 / applicationId / namespace：top.mossmoss.lessonisland
-启动入口：top.mossmoss.lessonisland.MainActivity
-测试入口：top.mossmoss.lessonisland.test/android.test.InstrumentationTestRunner
-源码目录：app/src/main/java/top/mossmoss/lessonisland
-Gradle 工程名称：LessonIsland
+软件标识
+包名：top.mossmoss.lessonisland
+版本：0.1.1，versionCode 2
+签名：E:/Android/libb.keystore
+证书 SHA-256：28c461e4f2f8612f9d7717d727e772177474798fd7c48b03ca3ffbca8c81bf0a
 
-更新范围
-- Android applicationId、namespace、Java 主代码及单元测试/仪器测试包声明和目录。
-- 英文系统应用名称、关于信息、构建产物名称、构建和测试脚本、界面辅助脚本、使用说明与源码包。
-- 项目本地 Debug、Android 测试包与 Release 均已使用 E:/Android/libb.keystore 实际签名，凭据由用户填写在 .local/signing.properties。
-- 交付 APK 已更新为 libb.keystore 签名版本。证书 SHA-256：28c461e4f2f8612f9d7717d727e772177474798fd7c48b03ca3ffbca8c81bf0a。
-- 内置 4 门课程、54 个课文句子、73 个重点素材、115 个去重音频保持可用。
+修复内容
+1. 示例课文、图片和音频已从主应用素材目录移到 app/src/androidTest/assets/fixtures，只用于测试。
+2. 正式安装包不包含示例课文或示例音频。新装应用课程数量为 0，不再自动导入或发布示例。
+3. 无课程时，首页直接显示「家长创建课程」，通过 PIN 后进入制课页面。
+4. 右上角显示「家长入口」，家长首页和课程工作台均有「创建课程」按钮。
+5. 未配置模型时，制课页显示「配置制课服务」，指引家长导入 API 配置。
+6. 旧版误导入的未修改示例在升级时移出活动课程列表，原文件归档到本机 legacy-sample-archive。自建课程、修改过的课程与学习进度保留。
+7. 空课程状态也可以导出和恢复备份。
 
-本次验证
-1. Debug 与 Release 构建成功。
-2. Android Lint 通过：0 错误，保留 7 条兼容性与同步偏好保存等建议。
-3. 新命名空间 JVM 单元测试：4 项通过，0 失败。
-4. 新包名在 Android 16 / API 36 模拟器上执行 5 项完整离线流程测试：全部通过，约 13 秒。
-   覆盖全部课程/音频、六关学习、关卡锁定、错题重练、会话恢复、重复通关不重复加分、复习安排、发布确认、Keystore 加密、备份恢复及恢复中断回滚。
-5. 正式 APK 的 manifest、启动 Activity、中英文应用名称和签名均已核验，并重新安装启动正式版。
-6. 源码和 APK 未内置用户提供的 API 密钥；本机签名证书和签名密码不随源码包分发。
-7. 用户补充签名凭据后，Debug 与 Release 已实际构建成功，APK 证书与 Gradle 从 libb.keystore 读取的证书完全一致。Android 10 / API 29 模拟器上以新签名执行 5 项完整回归测试，全部通过，约 11 秒。
-8. 按用户授权安装至已连接的 2304FPN6DC 真机（Android 16）。0.1.0 同证书覆盖安装返回 Success，冷启动返回 Status: ok，用时约 506 ms，已确认安装版本为 0.1.0。首页和 4 门内置课程已在此前真机验证中核对。
-9. 首个正式版本设为 0.1.0，versionCode 为 1。关于信息从已安装包读取版本号，构建脚本按版本号命名 APK。0.1.0 已通过 4 项 JVM 单元测试、Lint 和 5 项 Android 10 回归测试。
+验证结果
+- Debug、Release 构建通过；JVM 单元测试 4 项通过；Android Lint 0 错误，7 条建议。
+- Android 10 / API 29 模拟器 7 项回归测试通过，约 15 秒。
+- 新增验证：新装无课程、正式应用无示例素材、首页制课入口、PIN 验证后进入制课页、配置入口、空课程备份。
+- 新增升级验证：未修改示例归档；自建课程、修改过的课程和学习进度保留；示例旧会话不再出现在首页。
+- 原有六关学习、音频播放、发布确认、错题复习、进度恢复、备份校验及中断回滚验证均通过。
+- 正式 APK 解压检查未发现 assets/courses、assets/audio 或 fixtures；APK 约 77 KB，签名证书与用户 keystore 一致。
+- 已同证书覆盖安装至已连接的 2304FPN6DC 真机（Android 16），安装返回 Success，启动 Status: ok，实际版本为 0.1.1。
+- 真机首页原示例课程已移走，已实际看到「家长创建课程」按钮；点击后出现原有家长 PIN 验证，随后已观察到真机进入制课页面；未修改家长 PIN。
 
-测试证据
-- test-results/lessonisland-build.txt：本次构建与检查结果。
-- test-results/lessonisland-android36.txt：新包名 Android 仪器测试结果。
-- test-results/lessonisland-signature.txt：正式 APK 签名验证。
-- test-results/lessonisland-signing-config-checks.txt：外部 keystore 配置的单元测试与 Lint。
-- test-results/lessonisland-signing-required-fields.txt：缺少签名凭据时明确阻止构建的验证。
-- test-results/libb-build.txt：使用用户 keystore 的实际构建与检查结果。
-- test-results/libb-gradle-signing.txt：Gradle 配置证书信息，不包含密码。
-- test-results/libb-signature-debug.txt 与 libb-signature-release.txt：Debug / Release 签名核验。
-- test-results/libb-android29.txt：用户 keystore 签名版本的 Android 10 回归测试。
-- test-results/libb-phone-install.txt 与 libb-phone-launch.txt：真机安装与冷启动结果。
-- test-results/libb-phone-home-ui.txt 与 libb-phone-home.png：真机首页检查与实际截图。
-- test-results/v0.1.0-build.txt、v0.1.0-android29.txt、v0.1.0-signature.txt：0.1.0 构建、回归与签名证据。
-- test-results/v0.1.0-phone-install.txt、v0.1.0-phone-launch.txt：0.1.0 真机覆盖安装与启动结果。
-- app/build/test-results/testDebugUnitTest/TEST-top.mossmoss.lessonisland.LearningTest.xml：单元测试结果。
-- test-results/emulator-5580-screenshots：新包名原生界面截图。
+主要证据
+- test-results/v0.1.1-build.txt
+- test-results/v0.1.1-android29.txt
+- test-results/v0.1.1-signature.txt
+- test-results/v0.1.1-phone-install.txt
+- test-results/v0.1.1-phone-launch.txt
+- test-results/v0.1.1-phone-empty-home.txt
+- test-results/v0.1.1-phone-parent-entry.txt
+- test-results/v0.1.1-phone-create-course.png
 
-安装与数据
-包名变更后，Android 将新版视为独立应用，无法覆盖旧包名 com.textisland.app。
-已有课程和学习记录可在旧版家长设置导出 ZIP 备份，再在新版导入。
-API 配置与家长 PIN 不包含在备份中，需要在新版设置。
-本次操作保留旧包名应用及其数据，没有卸载旧版。
-
-旧版本的原始测试记录、APK 和源码包归档在 deliverables/archive-original-package。
-原版本曾在 Android 10 和 Android 16 上通过各 6 项含真实 API 制课的完整测试；本次包名更改在 Android 16 上复测，未重复调用收费模型 API。
+原 0.1.0 首个提交与标签 v0.1.0 保留；0.1.1 修复源码保存在当前工作区。
+API 密钥、签名密码和 keystore 不包含在源码包中。

@@ -51,6 +51,8 @@ public class AppFlowTest extends InstrumentationTestCase {
     stateBefore = app.store.state.toString();
     coursesBefore = new ArrayList<>();
     for (JSONObject c : app.store.courses(false)) coursesBefore.add(c.getString("id"));
+    seedTestFixtures();
+    ui(() -> app.home());
   }
 
   @Override
@@ -76,6 +78,59 @@ public class AppFlowTest extends InstrumentationTestCase {
     c.put("id", id).put("published", true);
     app.store.saveCourse(c);
     return c;
+  }
+
+  InputStream fixtureAsset(String name) throws Exception {
+    return getInstrumentation().getContext().getAssets().open("fixtures/" + name);
+  }
+
+  JSONObject sample(int number) throws Exception {
+    return new JSONObject(Store.read(fixtureAsset("courses/lesson" + number + ".json")));
+  }
+
+  void seedTestFixtures() throws Exception {
+    String[] audio = getInstrumentation().getContext().getAssets().list("fixtures/audio");
+    for (String name : audio) {
+      try (InputStream input = fixtureAsset("audio/" + name)) {
+        java.nio.file.Files.copy(
+            input,
+            new File(app.store.root, "audio/" + name).toPath(),
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      }
+    }
+    for (int number = 1; number <= 4; number++) {
+      JSONObject course = sample(number);
+      JSONArray sources = course.getJSONArray("sources"), local = new JSONArray();
+      for (int i = 0; i < sources.length(); i++) {
+        String name = sources.getString(i);
+        String destination = "images/fixture_" + name.substring(name.lastIndexOf('/') + 1);
+        try (InputStream input = fixtureAsset(name)) {
+          java.nio.file.Files.copy(
+              input,
+              new File(app.store.root, destination).toPath(),
+              java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+        local.put(destination);
+      }
+      course.put("sources", local);
+      app.store.saveCourse(course);
+    }
+  }
+
+  Context isolatedContext(String prefix) {
+    File directory = new File(app.getCacheDir(), prefix + UUID.randomUUID());
+    directory.mkdirs();
+    return new ContextWrapper(app) {
+      @Override
+      public File getFilesDir() {
+        return directory;
+      }
+
+      @Override
+      public SharedPreferences getSharedPreferences(String name, int mode) {
+        return app.getSharedPreferences(directory.getName() + "_" + name, mode);
+      }
+    };
   }
 
   List<View> views(View root) {
@@ -199,6 +254,97 @@ public class AppFlowTest extends InstrumentationTestCase {
           assertEquals("materials", app.page);
         });
     shot("03-key-materials");
+  }
+
+  public void testFreshInstallAndDirectCourseCreation() throws Exception {
+    Context context = isolatedContext("onboarding_");
+    Store fresh = new Store(context);
+    assertEquals("Fresh installs must have no courses", 0, fresh.courses(false).size());
+    ByteArrayOutputStream emptyBackup = new ByteArrayOutputStream();
+    fresh.exportZip(emptyBackup);
+    fresh.importZip(new ByteArrayInputStream(emptyBackup.toByteArray()));
+    assertEquals(0, fresh.courses(false).size());
+    assertEquals(0, app.getAssets().list("courses").length);
+    assertEquals(0, app.getAssets().list("audio").length);
+    Store original = app.store;
+    Audio originalAudio = app.audio;
+    Secrets originalSecrets = app.secrets;
+    Audio temporaryAudio = new Audio(app, fresh);
+    try {
+      ui(
+          () -> {
+            app.store = fresh;
+            app.audio = temporaryAudio;
+            app.secrets = new Secrets(context);
+            app.parent = false;
+            app.home();
+          });
+      shot("00-empty-first-launch");
+      click("家长创建课程");
+      assertFalse("Parent authentication must come before course creation", app.parent);
+      getInstrumentation().waitForIdleSync();
+      setPinFields(getInstrumentation().getUiAutomation().getRootInActiveWindow(), "1357");
+      accessibilityClick("设置并进入");
+      assertTrue(app.parent);
+      assertEquals("import", app.page);
+      assertNotNull(findButton("配置制课服务"));
+      shot("00-create-course");
+      click("配置制课服务");
+      assertEquals("settings", app.page);
+      ui(() -> app.dashboard());
+      click("＋  创建课程");
+      assertEquals("import", app.page);
+    } finally {
+      ui(
+          () -> {
+            temporaryAudio.close();
+            app.store = original;
+            app.audio = originalAudio;
+            app.secrets = originalSecrets;
+            app.parent = false;
+          });
+    }
+  }
+
+  void setPinFields(AccessibilityNodeInfo node, String value) {
+    if ("android.widget.EditText".contentEquals(node.getClassName())) {
+      android.os.Bundle arguments = new android.os.Bundle();
+      arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
+      assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments));
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      AccessibilityNodeInfo child = node.getChild(i);
+      if (child != null) setPinFields(child, value);
+    }
+  }
+
+  public void testLegacySamplesArchivePreservesUserCourses() throws Exception {
+    Context context = isolatedContext("migration_");
+    Store previous = new Store(context);
+    for (int number = 1; number <= 4; number++) previous.saveCourse(sample(number));
+    JSONObject own = sample(2);
+    own.put("id", "course_saved").put("title", "家长自己制作的课程");
+    previous.saveCourse(own);
+    JSONObject edited = sample(3);
+    edited.put("title", "已由家长修改的内容");
+    previous.saveCourse(edited);
+    previous.progress("course_saved").put("completed", 2);
+    previous.state.put("session", new JSONObject().put("course", "lesson1"));
+    previous.state.remove("legacySamplesArchived");
+    previous.save();
+    Store upgraded = new Store(context);
+    assertEquals(2, upgraded.courses(false).size());
+    assertEquals("家长自己制作的课程", upgraded.course("course_saved").getString("title"));
+    assertEquals(2, upgraded.progress("course_saved").getInt("completed"));
+    assertEquals("已由家长修改的内容", upgraded.course("lesson3").getString("title"));
+    assertFalse(upgraded.state.has("session"));
+    assertTrue(upgraded.state.has("archivedSampleSession"));
+    for (int number : new int[] {1, 2, 4}) {
+      assertTrue(
+          new File(upgraded.root, "legacy-sample-archive/lesson" + number + ".json").exists());
+      assertFalse(new File(upgraded.root, "courses/lesson" + number + ".json").exists());
+    }
+    assertEquals(2, new Store(context).courses(false).size());
   }
 
   public void testCompleteSixStagesWrongAnswerRetryAndReplayXp() throws Exception {
@@ -340,7 +486,7 @@ public class AppFlowTest extends InstrumentationTestCase {
   public void testBackupValidationAndRestore() throws Exception {
     fixture("test_backup");
     File sharedImage = new File(app.store.root, "images/test-backup.jpg");
-    try (InputStream source = app.getAssets().open("courses/lesson2-page1.jpg")) {
+    try (InputStream source = fixtureAsset("courses/lesson2-page1.jpg")) {
       java.nio.file.Files.copy(
           source, sharedImage.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
@@ -403,7 +549,7 @@ public class AppFlowTest extends InstrumentationTestCase {
     assertTrue(config.delete());
     app.ai.test();
     File image = new File(app.store.root, "images/test-live.jpg");
-    try (InputStream source = app.getAssets().open("courses/lesson2-page1.jpg")) {
+    try (InputStream source = fixtureAsset("courses/lesson2-page1.jpg")) {
       java.nio.file.Files.copy(
           source, image.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }

@@ -47,12 +47,7 @@ final class Audio {
   boolean exists(String text) {
     String name = Store.hash(text) + ".mp3";
     File file = new File(store.root, "audio/" + name);
-    if (file.length() > 200) return true;
-    try (InputStream ignored = context.getAssets().open("audio/" + name)) {
-      return true;
-    } catch (Exception e) {
-      return false;
-    }
+    return file.length() > 200;
   }
 
   int cached(JSONObject c) throws Exception {
@@ -64,14 +59,7 @@ final class Audio {
   synchronized File local(String text) throws Exception {
     String name = Store.hash(text) + ".mp3";
     File file = new File(store.root, "audio/" + name);
-    if (file.length() > 200) return file;
-    try (InputStream asset = context.getAssets().open("audio/" + name)) {
-      java.nio.file.Files.copy(
-          asset, file.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-      return file;
-    } catch (FileNotFoundException e) {
-      return null;
-    }
+    return file.length() > 200 ? file : null;
   }
 
   void download(JSONObject course, AiClient.Progress progress) throws Exception {

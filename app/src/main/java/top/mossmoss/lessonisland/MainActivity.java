@@ -215,7 +215,7 @@ public final class MainActivity extends Activity {
     header.setPadding(dp(22), dp(14), dp(22), dp(12));
     TextView logo = text("◒  课文岛", 20, INK, true);
     weight(header, logo);
-    TextView toggle = pill(parent ? "家长模式  ⇄" : "学生模式  ⇄", GREEN, parent ? LIME : Color.WHITE);
+    TextView toggle = pill(parent ? "返回学生" : "家长入口", GREEN, parent ? LIME : Color.WHITE);
     toggle.setMinHeight(dp(44));
     toggle.setContentDescription("切换模式");
     toggle.setOnClickListener(
@@ -315,6 +315,11 @@ public final class MainActivity extends Activity {
     safe(
         () -> {
           screen("home", "", true);
+          List<JSONObject> list = store.courses(true);
+          if (list.isEmpty()) {
+            emptyHome();
+            return;
+          }
           add(body, label("YOUR LITTLE ENGLISH ADVENTURE"));
           space(body, 9);
           heading("你好，" + store.state.optString("name", "探索家"), "今天也去课文里，发现一点新世界。");
@@ -347,8 +352,6 @@ public final class MainActivity extends Activity {
           title.addView(pill(store.courses(true).size() + " 个学习岛", MUTED, Color.WHITE));
           add(body, title);
           space(body, 14);
-          List<JSONObject> list = store.courses(true);
-          if (list.isEmpty()) empty("课程还在准备中", "请让家长导入课文图片并发布课程。");
           int n = 0;
           for (JSONObject c : list) {
             final String id = c.getString("id");
@@ -388,6 +391,30 @@ public final class MainActivity extends Activity {
                 () -> path(id));
           }
         });
+  }
+
+  void emptyHome() throws Exception {
+    boolean hasDrafts = !store.courses(false).isEmpty();
+    add(body, label("WELCOME TO LESSON ISLAND"));
+    space(body, 9);
+    heading(
+        hasDrafts ? "课程正在准备中" : "从第一篇课文开始", hasDrafts ? "家长发布课程后，孩子就可以开始闯关。" : "请家长先创建课程，再交给孩子学习。");
+    LinearLayout welcome = card(body);
+    welcome.setBackground(shape(Color.rgb(237, 245, 232), 24));
+    add(welcome, text(hasDrafts ? "还有一步，就能开始学习" : "把课文图片变成学习课程", 22, INK, true));
+    space(welcome, 12);
+    add(welcome, text("1. 选择课文图片\n2. 生成并校对课文、翻译和音频\n3. 发布课程，开始六关学习", 15, MUTED, false));
+    action(
+        welcome,
+        hasDrafts ? "家长管理课程" : "家长创建课程",
+        true,
+        () -> gate(hasDrafts ? this::courses : this::importScreen));
+    space(welcome, 10);
+    add(welcome, text("进入家长模式需要验证 PIN，首次使用时由家长设置。", 12, MUTED, false));
+    if (!secrets.hasPin()) {
+      space(body, 10);
+      add(body, text("右上角「家长入口」也可以随时进入课程工作台。", 13, MUTED, false));
+    }
   }
 
   void empty(String title, String subtitle) {
@@ -1051,6 +1078,14 @@ public final class MainActivity extends Activity {
   }
 
   void gate() {
+    gate(
+        () -> {
+          if (store.courses(false).isEmpty()) courses();
+          else dashboard();
+        });
+  }
+
+  void gate(Task destination) {
     safe(
         () -> {
           LinearLayout form = col();
@@ -1118,7 +1153,7 @@ public final class MainActivity extends Activity {
                                         .apply();
                                     parent = true;
                                     dialog.dismiss();
-                                    dashboard();
+                                    destination.run();
                                   })));
           dialog.show();
         });
@@ -1133,6 +1168,8 @@ public final class MainActivity extends Activity {
     add(body, label("PARENT STUDIO"));
     space(body, 9);
     heading("看见每一步成长", "课程在本机制作和发布，学习记录只保存在这台设备。 ");
+    action(body, "＋  创建课程", true, this::importScreen);
+    space(body, 18);
     LinearLayout summary = card(body);
     add(summary, text(store.state.optString("name"), 24, INK, true));
     space(summary, 15);
@@ -1219,8 +1256,11 @@ public final class MainActivity extends Activity {
     add(body, label("MAKE A LITTLE LEARNING ISLAND"));
     space(body, 9);
     heading("课程工作台", "从几张课文图片，开始一段新的学习旅程。 ");
-    action(body, "＋  从图片制作课程", true, this::importScreen);
+    action(body, "＋  创建课程", true, this::importScreen);
     space(body, 20);
+    if (store.courses(false).isEmpty()) {
+      empty("还没有创建课程", "点击上方「创建课程」，选择课文图片开始制作。");
+    }
     for (JSONObject c : store.courses(false)) {
       String id = c.getString("id");
       LinearLayout box = card(body);
@@ -1272,6 +1312,13 @@ public final class MainActivity extends Activity {
     if (!parent) return;
     screen("import", "课程工作台", false);
     heading("把课文变成学习岛", "按阅读顺序选择图片。生成后先校对，再发布给孩子。 ");
+    if (secrets.get().isEmpty()) {
+      LinearLayout setup = card(body);
+      add(setup, text("先连接制课服务", 20, INK, true));
+      space(setup, 8);
+      add(setup, text("导入 API 配置后，就能从图片生成课文、翻译和音频。", 14, MUTED, false));
+      action(setup, "配置制课服务", false, this::settings);
+    }
     JSONArray photos = store.state.optJSONArray("pendingImages");
     if (photos == null) photos = new JSONArray();
     final JSONArray list = photos;

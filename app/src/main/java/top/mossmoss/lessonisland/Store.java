@@ -32,14 +32,79 @@ public final class Store {
               .put("progress", new JSONObject())
               .put("reviews", new JSONObject())
               .put("history", new JSONArray());
-      for (String asset : context.getAssets().list("courses")) {
-        if (asset.endsWith(".json"))
-          write(
-              new File(root, "courses/" + asset),
-              read(context.getAssets().open("courses/" + asset)));
-      }
       save();
     }
+    archiveLegacySamples();
+  }
+
+  private void archiveLegacySamples() throws Exception {
+    if (state.optBoolean("legacySamplesArchived")) return;
+    String[] fingerprints = {
+      "a770d5de5b882d81950e3cb328ed6ca8d2298f1f293ca8fb45620d986ab6307c",
+      "34e494a3e1f76022996b503df466bfa60bde5293f2f67d62a7fd309ee80d7aa9",
+      "352381b0f5e0c8ea4ff7760cc679b784ea7dc85454834d25e02d1b8a5f730422",
+      "0e643774e3e21ab0f65c13c47a2dcfb1d65f24934da69607afd7e2294b3ccd96"
+    };
+    Set<String> archived = new HashSet<>();
+    File archive = new File(root, "legacy-sample-archive");
+    for (int i = 0; i < fingerprints.length; i++) {
+      String id = "lesson" + (i + 1);
+      File source = new File(root, "courses/" + id + ".json");
+      File destination = new File(archive, id + ".json");
+      if (source.exists()) {
+        JSONObject course = new JSONObject(read(new FileInputStream(source)));
+        // Only move the unchanged, previously auto-installed samples. Edited and new courses stay.
+        if (id.equals(course.optString("id"))
+            && fingerprints[i].equals(sampleFingerprint(course))) {
+          archive.mkdirs();
+          java.nio.file.Files.move(
+              source.toPath(),
+              destination.toPath(),
+              java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+          archived.add(id);
+        }
+      } else if (destination.exists()) archived.add(id);
+    }
+    JSONObject session = state.optJSONObject("session");
+    if (session != null && archived.contains(session.optString("course"))) {
+      state.put("archivedSampleSession", copy(session));
+      state.remove("session");
+    }
+    state.put("legacySamplesArchived", true);
+    save();
+  }
+
+  private static String sampleFingerprint(JSONObject course) throws Exception {
+    StringBuilder result =
+        new StringBuilder(course.optString("title"))
+            .append('\0')
+            .append(course.optString("subtitle"))
+            .append('\n');
+    String[] arrays = {"sentences", "vocabulary", "questions"};
+    String[][] fields = {
+      {"en", "zh", "speaker"},
+      {"en", "zh", "kind", "note", "phonetic"},
+      {"prompt", "options", "answer", "explanation"}
+    };
+    for (int section = 0; section < arrays.length; section++) {
+      result.append(arrays[section]).append('\n');
+      JSONArray items = course.getJSONArray(arrays[section]);
+      for (int i = 0; i < items.length(); i++) {
+        JSONObject item = items.getJSONObject(i);
+        for (String field : fields[section]) {
+          if (field.equals("options")) {
+            JSONArray options = item.getJSONArray(field);
+            for (int j = 0; j < options.length(); j++) {
+              if (j > 0) result.append('\0');
+              result.append(options.getString(j));
+            }
+          } else result.append(item.optString(field));
+          result.append('\0');
+        }
+        result.append('\n');
+      }
+    }
+    return hash(result.toString());
   }
 
   static byte[] bytes(InputStream input, int limit) throws IOException {
@@ -453,7 +518,6 @@ public final class Store {
           throw new Exception("课程编号不匹配");
         cs.add(c);
       }
-    if (cs.isEmpty()) throw new Exception("备份里没有课程");
     files.put("state.json", incoming.toString().getBytes(StandardCharsets.UTF_8));
     File backup = new File(root, "restore-backup");
     JSONArray journal = new JSONArray();
@@ -489,6 +553,7 @@ public final class Store {
       throw failure;
     }
     deleteOwnedTree(backup);
+    archiveLegacySamples();
   }
 
   void recoverRestore() throws Exception {

@@ -7,7 +7,7 @@ const text = await fs.readFile(path.join(root, 'llm info.txt'), 'utf8');
 const base = text.match(/https?:\/\/\S+/)[0].replace(/\/$/, '');
 const key = text.match(/(?:sk-)[A-Za-z0-9_-]+/)?.[0] || text.split(/\r?\n/).map(s=>s.trim()).find(s=>/^[A-Za-z0-9_-]{24,}$/.test(s));
 if (!key) throw Error('Cannot parse API credential');
-const out = path.join(root,'app/src/main/assets');
+const out = path.join(root,'app/src/androidTest/assets/fixtures');
 const prompt = `你是小学英语课程编辑。根据所提供的按顺序排列的课文图片，准确识别全部课文正文，不把练习指令、页码、词汇表当成正文，不遗漏后续图片中的正文。保持人物说话顺序。绝不编造看不清的内容，在 note 标记待校对处。每个完整句子独立一项。生成可供家长校对的课程，只输出 JSON，不用 markdown。schema: {"title":"英文课文标题","subtitle":"简短中文主题","note":"识别备注，无问题填空串","sentences":[{"en":"完整英文句子，不含人物前缀","zh":"适合小学生的准确中文翻译","speaker":"原文说话人或空串"}],"vocabulary":[{"en":"原文中的重点单词或短语或重点句子","zh":"中文释义","kind":"word 或 phrase 或 sentence","note":"简短语法/用法提示","phonetic":"单词国际音标，其他可为空"}],"questions":[{"prompt":"中文阅读理解问题","options":["中文选项A","中文选项B","中文选项C","中文选项D"],"answer":0,"explanation":"中文解释，引用课文依据"}]}. vocabulary含8-12个word、4-6个phrase和3个sentence，均来自原文。questions生成4个有唯一正确答案的理解题，answer是正确选项零基下标。正文必须忠实图片，不要缩写改写，不要增加正文。`;
 async function call(body) {
   const response = await fetch(base+'/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','api-key':key},body:JSON.stringify(body),signal:AbortSignal.timeout(240000)});
