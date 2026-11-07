@@ -18,7 +18,7 @@ try {
         & $taskAdb -s $Device shell rm /data/local/tmp/lessonisland-api-test.txt
         $taskArgs=@()
     } else {
-        $taskTests='testAssetsAndOfflineAudio','testCompleteSixStagesWrongAnswerRetryAndReplayXp','testReviewReschedulingAndAnswerPrivacy','testPublicationEditingAndModeGate','testBackupValidationAndRestore','testFreshInstallAndDirectCourseCreation','testLegacySamplesArchivePreservesUserCourses'
+        $taskTests='testAssetsAndOfflineAudio','testCompleteSixStagesWrongAnswerRetryAndReplayXp','testReviewReschedulingAndAnswerPrivacy','testPublicationEditingAndModeGate','testBackupValidationAndRestore','testFreshInstallAndDirectCourseCreation','testLegacySamplesArchivePreservesUserCourses','testApiKeyVisibilityAndSavedValue'
         $taskClasses=($taskTests | ForEach-Object {'top.mossmoss.lessonisland.AppFlowTest#'+$_}) -join ','
         $taskArgs=@('-e','class',$taskClasses)
     }

@@ -347,6 +347,64 @@ public class AppFlowTest extends InstrumentationTestCase {
     assertEquals(2, new Store(context).courses(false).size());
   }
 
+  public void testApiKeyVisibilityAndSavedValue() throws Exception {
+    Context context = isolatedContext("key_visibility_");
+    Secrets isolated = new Secrets(context);
+    String saved = "test-only-visibility-value";
+    String changed = "test-only-edited-value";
+    isolated.set(saved);
+    Secrets original = app.secrets;
+    try {
+      ui(
+          () -> {
+            app.secrets = isolated;
+            app.parent = true;
+            app.settings();
+            assertEquals(saved, app.apiKeyInput.getText().toString());
+            assertTrue(
+                app.apiKeyInput.getTransformationMethod()
+                    instanceof android.text.method.PasswordTransformationMethod);
+            app.apiKeyInput.setSelection(5);
+            app.apiKeyToggle.performClick();
+            assertTrue(app.apiKeyVisible);
+            assertNull(app.apiKeyInput.getTransformationMethod());
+            assertEquals(5, app.apiKeyInput.getSelectionStart());
+            assertEquals("隐藏 API 密钥", app.apiKeyToggle.getContentDescription());
+            app.apiKeyInput.setText(changed);
+            app.apiKeyInput.setSelection(3);
+            app.apiKeyToggle.performClick();
+            assertFalse(app.apiKeyVisible);
+            assertEquals(3, app.apiKeyInput.getSelectionStart());
+          });
+      click("保存 API 设置");
+      assertEquals(changed, isolated.get());
+      ui(
+          () -> {
+            assertEquals(changed, app.apiKeyInput.getText().toString());
+            assertFalse(app.apiKeyVisible);
+            app.apiKeyToggle.performClick();
+            getInstrumentation().callActivityOnPause(app);
+            assertFalse(app.apiKeyVisible);
+            assertTrue(
+                app.apiKeyInput.getTransformationMethod()
+                    instanceof android.text.method.PasswordTransformationMethod);
+            getInstrumentation().callActivityOnResume(app);
+            EditText oldField = app.apiKeyInput;
+            app.apiKeyToggle.performClick();
+            app.courses();
+            assertEquals("", oldField.getText().toString());
+            assertNull(app.apiKeyInput);
+          });
+    } finally {
+      ui(
+          () -> {
+            app.secrets = original;
+            app.parent = false;
+            app.home();
+          });
+    }
+  }
+
   public void testCompleteSixStagesWrongAnswerRetryAndReplayXp() throws Exception {
     fixture("test_flow");
     int baseline = app.store.state.optInt("xp");

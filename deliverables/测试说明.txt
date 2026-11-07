@@ -1,40 +1,37 @@
-课文岛 · Lesson Island 0.1.1 — 示例隔离与制课入口修复
+课文岛 · Lesson Island 0.1.2 — 发布验证
 验证日期：2026-11-07（北京时间）
 
-软件标识
+发布标识
 包名：top.mossmoss.lessonisland
-版本：0.1.1，versionCode 2
-签名：E:/Android/libb.keystore
+版本：0.1.2，versionCode 3
+Git 标签：v0.1.2
+签名 keystore：E:/Android/libb.keystore
 证书 SHA-256：28c461e4f2f8612f9d7717d727e772177474798fd7c48b03ca3ffbca8c81bf0a
 
-修复内容
-1. 示例课文、图片和音频已从主应用素材目录移到 app/src/androidTest/assets/fixtures，只用于测试。
-2. 正式安装包不包含示例课文或示例音频。新装应用课程数量为 0，不再自动导入或发布示例。
-3. 无课程时，首页直接显示「家长创建课程」，通过 PIN 后进入制课页面。
-4. 右上角显示「家长入口」，家长首页和课程工作台均有「创建课程」按钮。
-5. 未配置模型时，制课页显示「配置制课服务」，指引家长导入 API 配置。
-6. 旧版误导入的未修改示例在升级时移出活动课程列表，原文件归档到本机 legacy-sample-archive。自建课程、修改过的课程与学习进度保留。
-7. 空课程状态也可以导出和恢复备份。
+本次功能
+- 家长设置中的 API 密钥增加小眼睛，可以显示或隐藏已输入及已保存的密钥，默认隐藏。
+- 切换显示状态保留文本和光标；保存后重新隐藏；离开设置页清除旧输入视图中的内容；进入后台自动隐藏。
+- 新增 lesson-island-release 技能：版本采用 x.y.z，未指定本次发布版本号时必须先询问确认。本次版本号 0.1.2 由用户明确指定。
+- 继续保留 0.1.1 的空课程首次使用流程，示例素材只位于测试包，不进入正式 APK。
 
 验证结果
-- Debug、Release 构建通过；JVM 单元测试 4 项通过；Android Lint 0 错误，7 条建议。
-- Android 10 / API 29 模拟器 7 项回归测试通过，约 15 秒。
-- 新增验证：新装无课程、正式应用无示例素材、首页制课入口、PIN 验证后进入制课页、配置入口、空课程备份。
-- 新增升级验证：未修改示例归档；自建课程、修改过的课程和学习进度保留；示例旧会话不再出现在首页。
-- 原有六关学习、音频播放、发布确认、错题复习、进度恢复、备份校验及中断回滚验证均通过。
-- 正式 APK 解压检查未发现 assets/courses、assets/audio 或 fixtures；APK 约 77 KB，签名证书与用户 keystore 一致。
-- 已同证书覆盖安装至已连接的 2304FPN6DC 真机（Android 16），安装返回 Success，启动 Status: ok，实际版本为 0.1.1。
-- 真机首页原示例课程已移走，已实际看到「家长创建课程」按钮；点击后出现原有家长 PIN 验证，随后已观察到真机进入制课页面；未修改家长 PIN。
+- Debug / Release 构建成功；JVM 单元测试 4 项通过；Android Lint 0 错误、7 条建议。
+- Android 10 / API 29 模拟器 8 项回归测试全部通过，约 16 秒。
+- 新增密钥可见性验证使用隔离配置和测试密钥，覆盖：已保存密钥载入、默认隐藏、显示/隐藏、光标保留、编辑保存、后台自动隐藏及离开页面清理。
+- 原有首次使用、PIN 进入制课、升级迁移、完整六关学习、音频、复习、发布确认、备份与恢复测试通过。
+- APK 包名、0.1.2 版本号及 versionCode 3 已核对；APK 签名验证通过并与用户证书一致。
+- 正式 APK 无 assets/courses、assets/audio 或 fixtures，未包含示例课文和音频。
+- 发布技能的仓库版本及本机安装副本通过 skill-creator 校验。
+- 已同证书覆盖安装至 2304FPN6DC 真机（Android 16），安装 Success，冷启动 Status: ok，用时约 343 ms；已核对 versionName 0.1.2 和 versionCode 3。
 
-主要证据
-- test-results/v0.1.1-build.txt
-- test-results/v0.1.1-android29.txt
-- test-results/v0.1.1-signature.txt
-- test-results/v0.1.1-phone-install.txt
-- test-results/v0.1.1-phone-launch.txt
-- test-results/v0.1.1-phone-empty-home.txt
-- test-results/v0.1.1-phone-parent-entry.txt
-- test-results/v0.1.1-phone-create-course.png
+证据
+- test-results/v0.1.2-build.txt
+- test-results/v0.1.2-android29.txt
+- test-results/v0.1.2-signature.txt
+- test-results/v0.1.2-phone-install.txt
+- test-results/v0.1.2-phone-launch.txt
+- app/build/test-results/testDebugUnitTest/TEST-top.mossmoss.lessonisland.LearningTest.xml
 
-原 0.1.0 首个提交与标签 v0.1.0 保留；0.1.1 修复源码保存在当前工作区。
-API 密钥、签名密码和 keystore 不包含在源码包中。
+说明
+模拟器执行完整自动化回归，真机只做安装和启动检查，不将模拟器结果当作完整真机测试。
+签名凭据、keystore 和用户 API 密钥不进入 Git 或源码包。

@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.*;
 import android.text.InputType;
+import android.text.method.PasswordTransformationMethod;
 import android.view.*;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.*;
@@ -37,6 +38,9 @@ public final class MainActivity extends Activity {
   String page = "home", selectedId = "", status = "";
   int materialTab = 0;
   TextView statusView;
+  EditText apiKeyInput;
+  ImageButton apiKeyToggle;
+  boolean apiKeyVisible;
   List<Learning.Question> activeQuestions;
   JSONArray queue;
   int position, sessionStage, sessionAttempts, sessionCorrect;
@@ -194,6 +198,10 @@ public final class MainActivity extends Activity {
   }
 
   void screen(String name, String title, boolean nav) {
+    setApiKeyVisible(false);
+    if (apiKeyInput != null) apiKeyInput.setText("");
+    apiKeyInput = null;
+    apiKeyToggle = null;
     if (page.equals("quiz") && !name.equals("quiz")) pauseClock();
     page = name;
     if (name.equals("quiz") && activeTick == 0) activeTick = SystemClock.elapsedRealtime();
@@ -1946,7 +1954,7 @@ public final class MainActivity extends Activity {
                 "语音模型",
                 getSharedPreferences("config", 0).getString("tts", "mimo-v2.5-tts"),
                 false),
-        key = field(config, secrets.get().isEmpty() ? "API Key" : "已保存密钥；留空保持当前密钥", "", true);
+        key = apiKeyField(config, secrets.get());
     action(
         config,
         "保存 API 设置",
@@ -2090,6 +2098,52 @@ public final class MainActivity extends Activity {
             12,
             MUTED,
             false));
+  }
+
+  EditText apiKeyField(LinearLayout target, String value) {
+    space(target, 10);
+    LinearLayout container = row();
+    container.setBackground(outline(Color.WHITE, LINE));
+    EditText input = new EditText(this);
+    input.setTextSize(16);
+    input.setTextColor(INK);
+    input.setHintTextColor(MUTED);
+    input.setHint("API Key");
+    input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+    input.setSingleLine(true);
+    input.setSaveEnabled(false);
+    input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+    input.setPadding(dp(14), dp(13), dp(4), dp(13));
+    input.setMinHeight(dp(51));
+    input.setBackgroundColor(Color.TRANSPARENT);
+    input.setText(value);
+    weight(container, input);
+    ImageButton toggle = new ImageButton(this);
+    toggle.setBackground(shape(Color.TRANSPARENT, 12));
+    toggle.setPadding(dp(13), dp(13), dp(13), dp(13));
+    toggle.setImageTintList(ColorStateList.valueOf(GREEN));
+    toggle.setSaveEnabled(false);
+    toggle.setOnClickListener(v -> setApiKeyVisible(!apiKeyVisible));
+    container.addView(toggle, new LinearLayout.LayoutParams(dp(50), dp(50)));
+    add(target, container);
+    apiKeyInput = input;
+    apiKeyToggle = toggle;
+    setApiKeyVisible(false);
+    return input;
+  }
+
+  void setApiKeyVisible(boolean visible) {
+    apiKeyVisible = visible;
+    if (apiKeyInput == null) return;
+    int start = apiKeyInput.getSelectionStart(), end = apiKeyInput.getSelectionEnd();
+    apiKeyInput.setTransformationMethod(
+        visible ? null : PasswordTransformationMethod.getInstance());
+    if (start >= 0 && end >= 0) apiKeyInput.setSelection(start, end);
+    if (apiKeyToggle != null) {
+      apiKeyToggle.setImageResource(
+          visible ? R.drawable.ic_visibility_off : R.drawable.ic_visibility);
+      apiKeyToggle.setContentDescription(visible ? "隐藏 API 密钥" : "显示 API 密钥");
+    }
   }
 
   void pickFile(int code, String type) {
@@ -2288,6 +2342,7 @@ public final class MainActivity extends Activity {
 
   @Override
   protected void onPause() {
+    setApiKeyVisible(false);
     if (page.equals("quiz")) pauseClock();
     super.onPause();
     if (audio != null) audio.stop();
