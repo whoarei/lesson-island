@@ -535,7 +535,7 @@ public class AppFlowTest extends InstrumentationTestCase {
           app.parent = true;
           app.materialTab = 0;
           app.materials("test_publish", true);
-          assertNotNull(findButton("编辑此句"));
+          assertTrue(app.materialCards.get(0).isLongClickable());
         });
     c.getJSONArray("sentences").getJSONObject(0).put("zh", "");
     boolean rejected = false;
@@ -558,7 +558,7 @@ public class AppFlowTest extends InstrumentationTestCase {
     accessibilityClick("发布");
     assertTrue(app.store.course("test_publish").optBoolean("published"));
     ui(() -> app.materials("test_publish", true));
-    assertNull(findButton("编辑此句"));
+    assertFalse(app.materialCards.get(0).isLongClickable());
     assertNotNull(findButton("复制为新草稿并编辑"));
     Secrets secrets = new Secrets(app);
     String originalSecret = secrets.get();
@@ -659,6 +659,188 @@ public class AppFlowTest extends InstrumentationTestCase {
     shot("10-word-workshop");
   }
 
+  public void testMaterialTapPlaybackAndLongPressEditing() throws Exception {
+    JSONObject course = fixture("test_material_gestures");
+    course.put("published", false);
+    app.store.saveCourse(course);
+    ui(
+        () -> {
+          app.parent = true;
+          app.materialTab = 0;
+          app.materials(course.getString("id"), true);
+          assertNull(findButton("▶  全文连播"));
+          assertNull(findButton("停止朗读"));
+          assertNull(findButton("▶  朗读句子"));
+          assertNull(findButton("编辑此句"));
+          app.materialCards.get(0).performClick();
+          assertEquals(0, app.materialPlaying);
+          assertEquals(0, app.audio.currentIndex());
+          assertTrue(app.materialCards.get(0).isSelected());
+          assertEquals(View.VISIBLE, app.materialPlaybackBar.getVisibility());
+          app.materialCards.get(0).performClick();
+          assertEquals(-1, app.materialPlaying);
+          assertEquals(View.GONE, app.materialPlaybackBar.getVisibility());
+          app.materialCards.get(0).performClick();
+          app.materialCards.get(2).performClick();
+          assertEquals(2, app.materialPlaying);
+          assertFalse(app.materialCards.get(0).isSelected());
+          assertTrue(app.materialCards.get(2).isSelected());
+          assertTrue(app.materialCards.get(2).performLongClick());
+        });
+    assertTrue(
+        "Playing content cannot open an editor",
+        getInstrumentation()
+            .getUiAutomation()
+            .getRootInActiveWindow()
+            .findAccessibilityNodeInfosByText("校对素材")
+            .isEmpty());
+    ui(
+        () -> {
+          app.materialCards.get(0).performClick();
+          // Long-press a different, idle row: stop the old sequence before editing.
+          assertTrue(app.materialCards.get(1).performLongClick());
+          assertEquals(-1, app.audio.currentIndex());
+          assertEquals(-1, app.materialPlaying);
+        });
+    assertFalse(
+        getInstrumentation()
+            .getUiAutomation()
+            .getRootInActiveWindow()
+            .findAccessibilityNodeInfosByText("校对素材")
+            .isEmpty());
+    setAccessibleField(
+        getInstrumentation().getUiAutomation().getRootInActiveWindow(), "中文翻译", "长按后修改的翻译");
+    accessibilityClick("保存");
+    assertEquals(
+        "长按后修改的翻译",
+        app.store
+            .course(course.getString("id"))
+            .getJSONArray("sentences")
+            .getJSONObject(1)
+            .getString("zh"));
+    ui(() -> app.materialCards.get(0).performClick());
+    shot("11-content-playing");
+    Rect viewport = new Rect();
+    ui(() -> assertTrue(app.scroll.getGlobalVisibleRect(viewport)));
+    swipeOnScreen(
+        viewport.centerX(),
+        viewport.top + viewport.height() * .75f,
+        viewport.top + viewport.height() * .25f);
+    ui(
+        () ->
+            assertFalse(
+                "Manual browsing must disable automatic following", app.followMaterialPlayback));
+    // The compact stop control works even when the active row is out of view.
+    ui(
+        () -> {
+          ((ViewGroup) app.materialPlaybackBar).getChildAt(0).performClick();
+          assertEquals(-1, app.materialPlaying);
+          app.materialTab = 1;
+          app.materials(course.getString("id"), true);
+          assertNull(findButton("▶  朗读"));
+          assertNull(findButton("编辑素材"));
+          assertTrue(app.materialCards.get(0).isLongClickable());
+          app.materialCards.get(0).performClick();
+          assertEquals(0, app.materialPlaying);
+          app.materialTab = 0;
+          app.materials(course.getString("id"), true);
+          assertEquals(-1, app.audio.currentIndex());
+          app.parent = false;
+          app.materials("lesson2", false);
+          assertFalse(
+              "Students may not edit content by long press",
+              app.materialCards.get(0).isLongClickable());
+        });
+    shot("11-content-idle");
+    ui(
+        () -> {
+          app.materialCards.get(0).performClick();
+          app.home();
+          assertEquals(-1, app.audio.currentIndex());
+        });
+  }
+
+  void setAccessibleField(AccessibilityNodeInfo node, String hint, String value) {
+    if ("android.widget.EditText".contentEquals(node.getClassName())
+        && hint.contentEquals(node.getHintText())) {
+      android.os.Bundle arguments = new android.os.Bundle();
+      arguments.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value);
+      assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments));
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      AccessibilityNodeInfo child = node.getChild(i);
+      if (child != null) setAccessibleField(child, hint, value);
+    }
+  }
+
+  void swipeOnScreen(float x, float from, float to) {
+    long start = android.os.SystemClock.uptimeMillis();
+    for (int i = 0; i <= 10; i++) {
+      int action =
+          i == 0
+              ? MotionEvent.ACTION_DOWN
+              : i == 10 ? MotionEvent.ACTION_UP : MotionEvent.ACTION_MOVE;
+      MotionEvent event =
+          MotionEvent.obtain(
+              start,
+              android.os.SystemClock.uptimeMillis(),
+              action,
+              x,
+              from + (to - from) * i / 10,
+              0);
+      getInstrumentation().sendPointerSync(event);
+      event.recycle();
+      android.os.SystemClock.sleep(25);
+    }
+    getInstrumentation().waitForIdleSync();
+  }
+
+  public void testContinuousAudioAdvancementCancellationAndFailure() throws Exception {
+    String sentence =
+        app.store.course("lesson2").getJSONArray("sentences").getJSONObject(0).getString("en");
+    // Identical text at different positions must still play as distinct sentences.
+    List<String> items = Arrays.asList(sentence, sentence, sentence);
+    List<Integer> events = new ArrayList<>();
+    List<String> errors = new ArrayList<>();
+    ui(() -> app.audio.playList(items, 0, events::add, errors::add));
+    waitForAudioEnd(18000);
+    assertEquals(Arrays.asList(0, 1, 2, -1), events);
+    assertTrue(errors.toString(), errors.isEmpty());
+    List<Integer> interrupted = new ArrayList<>(), replacement = new ArrayList<>();
+    ui(
+        () -> {
+          app.audio.playList(items, 0, interrupted::add, errors::add);
+          // Switch while the first MediaPlayer is still preparing.
+          app.audio.playList(items, 2, replacement::add, errors::add);
+        });
+    waitForAudioEnd(10000);
+    assertEquals(Arrays.asList(0, -1), interrupted);
+    assertEquals(Arrays.asList(2, -1), replacement);
+    assertTrue(errors.toString(), errors.isEmpty());
+    String corrupt = "test corrupt audio " + UUID.randomUUID();
+    File broken = new File(app.store.root, "audio/" + Store.hash(corrupt) + ".mp3");
+    try {
+      java.nio.file.Files.write(broken.toPath(), new byte[1024]);
+      events.clear();
+      ui(() -> app.audio.playList(Arrays.asList(corrupt, sentence), 0, events::add, errors::add));
+      waitForAudioEnd(6000);
+      assertEquals(Arrays.asList(0, -1), events);
+      assertEquals("A failed sentence must clear playback and report the error", 1, errors.size());
+    } finally {
+      broken.delete();
+    }
+  }
+
+  void waitForAudioEnd(long timeout) throws Exception {
+    long deadline = android.os.SystemClock.elapsedRealtime() + timeout;
+    boolean[] ended = {false};
+    while (!ended[0] && android.os.SystemClock.elapsedRealtime() < deadline) {
+      Thread.sleep(60);
+      ui(() -> ended[0] = app.audio.currentIndex() < 0);
+    }
+    assertTrue("Audio sequence must finish without another tap", ended[0]);
+  }
+
   public void testBackupValidationAndRestore() throws Exception {
     fixture("test_backup");
     File sharedImage = new File(app.store.root, "images/test-backup.jpg");
@@ -744,7 +926,8 @@ public class AppFlowTest extends InstrumentationTestCase {
           app.materialTab = 0;
           app.materials(course.getString("id"), true);
         });
-    assertNotNull(findButton("全文连播") == null ? findButton("▶  全文连播") : findButton("全文连播"));
+    assertFalse(app.materialCards.isEmpty());
+    assertTrue(app.materialCards.get(0).isClickable());
     ui(
         () -> {
           app.parent = false;

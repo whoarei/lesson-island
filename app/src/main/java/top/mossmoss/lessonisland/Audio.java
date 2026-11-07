@@ -2,6 +2,8 @@ package top.mossmoss.lessonisland;
 
 import android.content.*;
 import android.media.*;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.tts.*;
 import java.io.*;
 import java.util.*;
@@ -18,6 +20,9 @@ final class Audio {
   private volatile boolean ready;
   private float speed = 1f;
   private int playbackGeneration;
+  private final Handler main = new Handler(Looper.getMainLooper());
+  private java.util.function.IntConsumer playbackListener;
+  private int activeIndex = -1;
 
   Audio(Context c, Store s) {
     context = c;
@@ -95,13 +100,29 @@ final class Audio {
   }
 
   void playList(List<String> items, java.util.function.Consumer<String> error) {
+    playList(items, 0, null, error);
+  }
+
+  /** Includes preparing and system speech; every stop/end clears the highlighted item. */
+  void playList(
+      List<String> items,
+      int start,
+      java.util.function.IntConsumer listener,
+      java.util.function.Consumer<String> error) {
     stop();
     int token = playbackGeneration;
-    playAt(items, 0, token, error);
+    playbackListener = listener;
+    playAt(new ArrayList<>(items), start, token, error);
   }
 
   void playAt(List<String> items, int index, int token, java.util.function.Consumer<String> error) {
-    if (index >= items.size() || token != playbackGeneration) return;
+    if (token != playbackGeneration) return;
+    if (index < 0 || index >= items.size()) {
+      stop();
+      return;
+    }
+    activeIndex = index;
+    if (playbackListener != null) playbackListener.accept(index);
     try {
       File file = local(items.get(index));
       if (file != null) {
@@ -114,34 +135,57 @@ final class Audio {
         player.setDataSource(file.getAbsolutePath());
         player.setOnPreparedListener(
             p -> {
-              if (token != playbackGeneration) {
-                p.release();
-                return;
+              if (token != playbackGeneration || player != p) return;
+              try {
+                p.setPlaybackParams(new PlaybackParams().setSpeed(speed));
+                p.start();
+              } catch (Exception e) {
+                fail(token, error, "音频播放失败，请重试");
               }
-              p.setPlaybackParams(new PlaybackParams().setSpeed(speed));
-              p.start();
             });
         player.setOnCompletionListener(
             p -> {
+              if (token != playbackGeneration || player != p) return;
               p.release();
-              if (player == p) player = null;
+              player = null;
               playAt(items, index + 1, token, error);
             });
         player.setOnErrorListener(
             (p, a, b) -> {
-              error.accept("音频播放失败，请重试");
-              stop();
+              if (player == p) fail(token, error, "音频播放失败，请重试");
               return true;
             });
         player.prepareAsync();
       } else if (ready) {
         tts.setSpeechRate(speed);
-        tts.speak(items.get(index), TextToSpeech.QUEUE_FLUSH, null, "island");
-        if (items.size() > 1) error.accept("此句使用系统朗读；请先下载完整音频以使用全文连播");
-      } else error.accept("此音频尚未下载，且设备没有可用的英语语音。请让家长下载音频");
+        String utterance = "island-" + token + "-" + index;
+        tts.setOnUtteranceProgressListener(
+            new UtteranceProgressListener() {
+              @Override
+              public void onStart(String id) {}
+
+              @Override
+              public void onDone(String id) {
+                if (utterance.equals(id)) main.post(() -> playAt(items, index + 1, token, error));
+              }
+
+              @Override
+              public void onError(String id) {
+                if (utterance.equals(id)) main.post(() -> fail(token, error, "系统朗读失败，请重试"));
+              }
+            });
+        if (tts.speak(items.get(index), TextToSpeech.QUEUE_FLUSH, null, utterance)
+            == TextToSpeech.ERROR) fail(token, error, "系统朗读失败，请重试");
+      } else fail(token, error, "此音频尚未下载，且设备没有可用的英语语音。请让家长下载音频");
     } catch (Exception e) {
-      error.accept("无法播放此音频，请让家长重新下载");
+      fail(token, error, "无法播放此音频，请让家长重新下载");
     }
+  }
+
+  private void fail(int token, java.util.function.Consumer<String> error, String message) {
+    if (token != playbackGeneration) return;
+    stop();
+    error.accept(message);
   }
 
   void stop() {
@@ -154,11 +198,19 @@ final class Audio {
       player = null;
     }
     if (tts != null) tts.stop();
+    activeIndex = -1;
+    java.util.function.IntConsumer previous = playbackListener;
+    playbackListener = null;
+    if (previous != null) previous.accept(-1);
+  }
+
+  int currentIndex() {
+    return activeIndex;
   }
 
   boolean isPlaying() {
     try {
-      return player != null && player.isPlaying();
+      return (player != null && player.isPlaying()) || (tts != null && tts.isSpeaking());
     } catch (IllegalStateException ignored) {
       return false;
     }

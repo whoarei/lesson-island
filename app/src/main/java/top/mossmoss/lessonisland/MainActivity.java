@@ -37,6 +37,12 @@ public final class MainActivity extends Activity {
   String page = "home", selectedId = "", status = "";
   int materialTab = 0;
   TextView statusView;
+  final List<LinearLayout> materialCards = new ArrayList<>();
+  final List<TextView> materialStates = new ArrayList<>();
+  LinearLayout materialPlaybackBar;
+  TextView materialPlaybackStatus;
+  int materialPlaying = -1;
+  boolean followMaterialPlayback = true;
   Toast lastToast;
   EditText apiKeyInput;
   ImageButton apiKeyToggle;
@@ -250,6 +256,13 @@ public final class MainActivity extends Activity {
   }
 
   void screen(String name, String title, boolean nav) {
+    if (page.equals("materials") && audio != null) audio.stop();
+    materialCards.clear();
+    materialStates.clear();
+    materialPlaying = -1;
+    materialPlaybackBar = null;
+    materialPlaybackStatus = null;
+    followMaterialPlayback = true;
     if (lastToast != null) lastToast.cancel();
     setApiKeyVisible(false);
     if (apiKeyInput != null) apiKeyInput.setText("");
@@ -304,7 +317,7 @@ public final class MainActivity extends Activity {
         });
     header.addView(toggle);
     add(shell, header);
-    scroll = new ScrollView(this);
+    scroll = new ContentScrollView(this);
     scroll.setFillViewport(true);
     scroll.setClipToPadding(false);
     LinearLayout outer = col();
@@ -1874,45 +1887,32 @@ public final class MainActivity extends Activity {
     add(body, tabs);
     space(body, 18);
     if (materialTab == 0) {
-      action(
-          body,
-          "▶  全文连播",
-          false,
-          () -> {
-            List<String> items = new ArrayList<>();
-            JSONArray a = c.getJSONArray("sentences");
-            for (int i = 0; i < a.length(); i++) items.add(a.getJSONObject(i).getString("en"));
-            audio.setSpeed(1);
-            audio.playList(items, this::toast);
-          });
-      action(body, "停止朗读", false, () -> audio.stop());
-      space(body, 15);
+      materialHint(editable);
+      List<String> items = new ArrayList<>();
       JSONArray a = c.getJSONArray("sentences");
       for (int i = 0; i < a.length(); i++) {
         JSONObject s = a.getJSONObject(i);
         int index = i;
+        items.add(s.getString("en"));
         LinearLayout box = card(body);
-        add(
+        bindMaterialCard(
             box,
-            label(
-                String.format(Locale.CHINA, "%02d", i + 1)
-                    + (s.optString("speaker").isEmpty() ? "" : "  /  " + s.optString("speaker"))));
+            c,
+            "sentences",
+            index,
+            items,
+            editable,
+            String.format(Locale.CHINA, "%02d", i + 1)
+                + (s.optString("speaker").isEmpty() ? "" : "  /  " + s.optString("speaker")));
         space(box, 10);
         add(box, text(s.getString("en"), 21, INK, true));
         space(box, 9);
         add(box, text(s.getString("zh"), 15, MUTED, false));
-        action(
-            box,
-            "▶  朗读句子",
-            false,
-            () -> {
-              audio.setSpeed(1);
-              audio.play(s.getString("en"), this::toast);
-            });
-        if (editable) action(box, "编辑此句", false, () -> editItem(c, "sentences", index));
       }
       if (editable) action(body, "＋  添加句子", false, () -> editItem(c, "sentences", -1));
     } else if (materialTab == 1) {
+      materialHint(editable);
+      List<String> items = new ArrayList<>();
       JSONArray a = c.getJSONArray("vocabulary");
       for (String kind : new String[] {"word", "phrase", "sentence"}) {
         add(
@@ -1927,7 +1927,17 @@ public final class MainActivity extends Activity {
           JSONObject v = a.getJSONObject(i);
           if (!kind.equals(v.optString("kind"))) continue;
           int index = i;
+          items.add(v.getString("en"));
           LinearLayout box = card(body);
+          bindMaterialCard(
+              box,
+              c,
+              "vocabulary",
+              index,
+              items,
+              editable,
+              String.format(Locale.CHINA, "%02d", items.size()));
+          space(box, 8);
           add(box, text(v.getString("en"), 21, INK, true));
           if (!v.optString("phonetic").isEmpty()) {
             space(box, 4);
@@ -1937,8 +1947,6 @@ public final class MainActivity extends Activity {
           add(box, text(v.getString("zh"), 16, INK, false));
           space(box, 8);
           add(box, text(v.optString("note"), 13, MUTED, false));
-          action(box, "▶  朗读", false, () -> audio.play(v.getString("en"), this::toast));
-          if (editable) action(box, "编辑素材", false, () -> editItem(c, "vocabulary", index));
         }
       }
       if (editable) action(body, "＋  添加重点素材", false, () -> editItem(c, "vocabulary", -1));
@@ -1983,6 +1991,141 @@ public final class MainActivity extends Activity {
           }
         if (editable) action(body, "＋  添加理解题", false, () -> editQuestion(c, -1));
       }
+    }
+  }
+
+  void materialHint(boolean editable) {
+    add(body, text("轻点连播，再点当前内容停止。" + (editable ? "\n长按未播放的内容可编辑。" : ""), 13, MUTED, false));
+    space(body, 14);
+    ((ContentScrollView) scroll).onManualScroll =
+        () -> {
+          if (followMaterialPlayback) {
+            followMaterialPlayback = false;
+            updateMaterialPlaybackStatus();
+          }
+        };
+  }
+
+  void bindMaterialCard(
+      LinearLayout box,
+      JSONObject course,
+      String array,
+      int sourceIndex,
+      List<String> items,
+      boolean editable,
+      String number)
+      throws Exception {
+    int playbackIndex = materialCards.size();
+    JSONObject item = course.getJSONArray(array).getJSONObject(sourceIndex);
+    LinearLayout head = row();
+    weight(head, label(number));
+    TextView state = text("正在朗读", 12, GREEN, true);
+    state.setVisibility(View.GONE);
+    head.addView(state);
+    add(box, head);
+    materialCards.add(box);
+    materialStates.add(state);
+    box.setTag("material:" + array + ":" + sourceIndex);
+    box.setFocusable(true);
+    box.setContentDescription(
+        item.getString("en")
+            + "。"
+            + item.getString("zh")
+            + "。轻点开始或停止连续朗读"
+            + (editable ? "，长按未播放的内容可编辑" : ""));
+    box.setForeground(
+        new android.graphics.drawable.RippleDrawable(
+            ColorStateList.valueOf(Color.argb(30, 12, 119, 99)), null, shape(Color.WHITE, 24)));
+    box.setOnClickListener(
+        v -> {
+          if (materialPlaying == playbackIndex) audio.stop();
+          else {
+            followMaterialPlayback = true;
+            audio.setSpeed(1f);
+            audio.playList(items, playbackIndex, this::showMaterialPlaying, this::toast);
+          }
+        });
+    if (editable)
+      box.setOnLongClickListener(
+          v -> {
+            if (materialPlaying == playbackIndex) {
+              toast("先轻点停止朗读，再长按编辑");
+            } else {
+              audio.stop();
+              safe(() -> editItem(course, array, sourceIndex));
+            }
+            return true;
+          });
+  }
+
+  void showMaterialPlaying(int index) {
+    if (!page.equals("materials")) return;
+    materialPlaying = index;
+    for (int i = 0; i < materialCards.size(); i++) {
+      boolean active = i == index;
+      materialCards.get(i).setSelected(active);
+      materialCards
+          .get(i)
+          .setBackground(
+              new AdventureArt.Face(
+                  this, active ? AdventureArt.SKY : Color.WHITE, active ? GREEN : LINE, 24, 3));
+      materialStates.get(i).setVisibility(active ? View.VISIBLE : View.GONE);
+    }
+    if (index < 0 || index >= materialCards.size()) {
+      if (materialPlaybackBar != null) materialPlaybackBar.setVisibility(View.GONE);
+      return;
+    }
+    if (materialPlaybackBar == null) {
+      materialPlaybackBar = col();
+      materialPlaybackBar.setPadding(dp(20), dp(8), dp(20), dp(8));
+      materialPlaybackBar.setBackgroundColor(Color.WHITE);
+      LinearLayout strip = row();
+      strip.setMinimumHeight(dp(48));
+      strip.setPadding(dp(14), dp(10), dp(14), dp(10));
+      strip.setBackground(outline(LIME, Color.rgb(205, 227, 178)));
+      TextView stop = text("■", 18, GREEN, true);
+      stop.setPadding(0, 0, dp(12), 0);
+      strip.addView(stop);
+      materialPlaybackStatus = text("", 13, GREEN, true);
+      weight(strip, materialPlaybackStatus);
+      strip.setOnClickListener(v -> audio.stop());
+      strip.setFocusable(true);
+      strip.setContentDescription("停止连续朗读");
+      add(materialPlaybackBar, strip);
+      shell.addView(
+          materialPlaybackBar,
+          shell.indexOfChild(scroll) + 1,
+          new LinearLayout.LayoutParams(-1, -2));
+    }
+    materialPlaybackBar.setVisibility(View.VISIBLE);
+    updateMaterialPlaybackStatus();
+    LinearLayout current = materialCards.get(index);
+    scroll.post(
+        () -> {
+          if (followMaterialPlayback
+              && materialPlaying == index
+              && materialCards.size() > index
+              && materialCards.get(index) == current) {
+            Rect rect = new Rect();
+            current.getDrawingRect(rect);
+            scroll.offsetDescendantRectToMyCoords(current, rect);
+            scroll.smoothScrollTo(0, Math.max(0, rect.top - dp(12)));
+          }
+        });
+  }
+
+  void updateMaterialPlaybackStatus() {
+    if (materialPlaybackStatus != null && materialPlaying >= 0) {
+      materialPlaybackStatus.setText(
+          getString(
+              R.string.material_playback_status,
+              materialPlaying + 1,
+              materialCards.size(),
+              getString(
+                  followMaterialPlayback
+                      ? R.string.material_stop_hint
+                      : R.string.material_browse_stop_hint)));
+      materialPlaybackBar.getChildAt(0).setContentDescription(materialPlaybackStatus.getText());
     }
   }
 
@@ -2605,6 +2748,28 @@ public final class MainActivity extends Activity {
     if (audio != null) audio.close();
     jobs.shutdownNow();
     super.onDestroy();
+  }
+
+  static final class ContentScrollView extends ScrollView {
+    Runnable onManualScroll;
+    float downY;
+    final int touchSlop;
+
+    ContentScrollView(Context c) {
+      super(c);
+      touchSlop = ViewConfiguration.get(c).getScaledTouchSlop();
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+      if (event.getActionMasked() == MotionEvent.ACTION_DOWN) downY = event.getY();
+      else if (event.getActionMasked() == MotionEvent.ACTION_MOVE
+          && Math.abs(event.getY() - downY) > touchSlop
+          && onManualScroll != null) {
+        onManualScroll.run();
+      }
+      return super.dispatchTouchEvent(event);
+    }
   }
 
   static final class ContentLayout extends LinearLayout {
