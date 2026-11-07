@@ -1,0 +1,287 @@
+{
+  "title": "The weekend",
+  "subtitle": "周末计划与问候",
+  "note": "已根据图片识别正文，未包含听力指令、页码及生词表。所有句子均忠实原文。",
+  "sentences": [
+    {
+      "en": "Hello.",
+      "zh": "你好。",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "Were you at the butcher's?",
+      "zh": "你去过肉店吗？",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "Yes, I was.",
+      "zh": "是的，我去过。",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "Were you at the butcher's, too?",
+      "zh": "你也去过肉店吗？",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "No, I wasn't.",
+      "zh": "不，我没去过。",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "I was at the greengrocer's.",
+      "zh": "我去了蔬菜水果店。",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "How's Jimmy today?",
+      "zh": "吉米今天怎么样？",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "He's very well, thank you.",
+      "zh": "他很好，谢谢。",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "Was he absent from school last week?",
+      "zh": "他上周缺课了吗？",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "Yes, he was.",
+      "zh": "是的，他缺课了。",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "He was absent on Monday, Tuesday, Wednesday and Thursday.",
+      "zh": "他星期一、星期二、星期三和星期四都缺课了。",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "How are you all keeping?",
+      "zh": "你们大家都好吗？",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "Very well, thank you.",
+      "zh": "都很好，谢谢。",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "We're going to spend three days in the country.",
+      "zh": "我们打算在乡下度过三天。",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "We're going to stay at my mother's for the weekend.",
+      "zh": "我们打算周末住在我母亲家。",
+      "speaker": "MRS. JOHNSON"
+    },
+    {
+      "en": "Friday, Saturday and Sunday in the country!",
+      "zh": "星期五、星期六和星期天都在乡下！",
+      "speaker": "MRS. WILLIAMS"
+    },
+    {
+      "en": "Aren't you lucky!",
+      "zh": "你们真幸运！",
+      "speaker": "MRS. WILLIAMS"
+    }
+  ],
+  "vocabulary": [
+    {
+      "en": "greengrocer",
+      "zh": "蔬菜水果零售商",
+      "kind": "word",
+      "note": "名词，指卖蔬菜水果的店主或店铺。",
+      "phonetic": "/ˈɡriːnˌɡrəʊsə/"
+    },
+    {
+      "en": "absent",
+      "zh": "缺席的",
+      "kind": "word",
+      "note": "形容词，常与 from 连用，表示缺席某地。",
+      "phonetic": "/ˈæbsənt/"
+    },
+    {
+      "en": "Monday",
+      "zh": "星期一",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈmʌndeɪ/"
+    },
+    {
+      "en": "Tuesday",
+      "zh": "星期二",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈtjuːzdeɪ/"
+    },
+    {
+      "en": "Wednesday",
+      "zh": "星期三",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈwenzdeɪ/"
+    },
+    {
+      "en": "Thursday",
+      "zh": "星期四",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈθɜːzdeɪ/"
+    },
+    {
+      "en": "spend",
+      "zh": "度过",
+      "kind": "word",
+      "note": "动词，常用于 spend time/money (in) doing sth。",
+      "phonetic": "/spend/"
+    },
+    {
+      "en": "weekend",
+      "zh": "周末",
+      "kind": "word",
+      "note": "名词，指星期六和星期天。",
+      "phonetic": "/ˌwiːkˈend/"
+    },
+    {
+      "en": "Friday",
+      "zh": "星期五",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈfraɪdeɪ/"
+    },
+    {
+      "en": "Saturday",
+      "zh": "星期六",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈsætədeɪ/"
+    },
+    {
+      "en": "Sunday",
+      "zh": "星期日",
+      "kind": "word",
+      "note": "星期名称的首字母大写；表示在这一天时用 on。",
+      "phonetic": "/ˈsʌndeɪ/"
+    },
+    {
+      "en": "country",
+      "zh": "乡村",
+      "kind": "word",
+      "note": "名词，指乡下、农村地区。",
+      "phonetic": "/ˈkʌntri/"
+    },
+    {
+      "en": "at the butcher's",
+      "zh": "在肉店",
+      "kind": "phrase",
+      "note": "名词所有格形式，表示店铺地点。",
+      "phonetic": ""
+    },
+    {
+      "en": "at the greengrocer's",
+      "zh": "在蔬菜水果店",
+      "kind": "phrase",
+      "note": "名词所有格形式，表示店铺地点。",
+      "phonetic": ""
+    },
+    {
+      "en": "absent from school",
+      "zh": "缺课",
+      "kind": "phrase",
+      "note": "固定搭配，表示没去上学。",
+      "phonetic": ""
+    },
+    {
+      "en": "spend three days in the country",
+      "zh": "在乡下度过三天",
+      "kind": "phrase",
+      "note": "spend + 时间 + 地点 的用法。",
+      "phonetic": ""
+    },
+    {
+      "en": "stay at my mother's",
+      "zh": "住在我母亲家",
+      "kind": "phrase",
+      "note": "at + 人名's 表示在某人家中。",
+      "phonetic": ""
+    },
+    {
+      "en": "How are you all keeping?",
+      "zh": "你们大家都好吗？",
+      "kind": "sentence",
+      "note": "询问对方近况的常用口语表达。",
+      "phonetic": ""
+    },
+    {
+      "en": "We're going to spend three days in the country.",
+      "zh": "我们打算在乡下度过三天。",
+      "kind": "sentence",
+      "note": "be going to 结构表示将来的计划。",
+      "phonetic": ""
+    },
+    {
+      "en": "Aren't you lucky!",
+      "zh": "你们真幸运！",
+      "kind": "sentence",
+      "note": "否定疑问句形式的感叹句，表示赞叹。",
+      "phonetic": ""
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "约翰逊太太（Mrs. Johnson）刚才去了哪里？",
+      "options": [
+        "肉店（butcher's）",
+        "蔬菜水果店（greengrocer's）",
+        "学校（school）",
+        "乡下（country）"
+      ],
+      "answer": 1,
+      "explanation": "课文中原句为 'I was at the greengrocer's.'，说明她去了蔬菜水果店。"
+    },
+    {
+      "prompt": "吉米（Jimmy）上周缺课了几天？",
+      "options": [
+        "两天",
+        "三天",
+        "四天",
+        "五天"
+      ],
+      "answer": 2,
+      "explanation": "课文提到 'He was absent on Monday, Tuesday, Wednesday and Thursday.'，共四天。"
+    },
+    {
+      "prompt": "约翰逊一家周末打算去哪里？",
+      "options": [
+        "去肉店",
+        "去学校",
+        "去乡下",
+        "去超市"
+      ],
+      "answer": 2,
+      "explanation": "课文中原句为 'We're going to spend three days in the country.'，country 意为乡下。"
+    },
+    {
+      "prompt": "威廉姆斯太太（Mrs. Williams）觉得约翰逊一家的周末计划怎么样？",
+      "options": [
+        "很糟糕",
+        "很幸运",
+        "很忙碌",
+        "很无聊"
+      ],
+      "answer": 1,
+      "explanation": "课文最后威廉姆斯太太说 'Aren't you lucky!'，表示她觉得他们很幸运。"
+    }
+  ],
+  "id": "lesson3",
+  "published": true,
+  "sources": [
+    "courses/lesson3-page1.jpg",
+    "courses/lesson3-page2.jpg"
+  ],
+  "createdAt": 1794053071009
+}

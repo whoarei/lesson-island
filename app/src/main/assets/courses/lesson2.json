@@ -1,0 +1,201 @@
+{
+  "title": "Excuse me!",
+  "subtitle": "对不起！",
+  "note": "课文正文清晰，无待校对处。",
+  "sentences": [
+    {
+      "en": "Excuse me!",
+      "zh": "对不起！",
+      "speaker": "男士"
+    },
+    {
+      "en": "Yes?",
+      "zh": "什么事？",
+      "speaker": "女士"
+    },
+    {
+      "en": "Is this your handbag?",
+      "zh": "这是您的手袋吗？",
+      "speaker": "男士"
+    },
+    {
+      "en": "Pardon?",
+      "zh": "请再说一遍？",
+      "speaker": "女士"
+    },
+    {
+      "en": "Is this your handbag?",
+      "zh": "这是您的手袋吗？",
+      "speaker": "男士"
+    },
+    {
+      "en": "Yes, it is.",
+      "zh": "是的，是我的。",
+      "speaker": "女士"
+    },
+    {
+      "en": "Thank you very much.",
+      "zh": "非常感谢。",
+      "speaker": "女士"
+    }
+  ],
+  "vocabulary": [
+    {
+      "en": "excuse",
+      "zh": "原谅",
+      "kind": "word",
+      "note": "常用于礼貌用语 Excuse me",
+      "phonetic": "/ɪkˈskjuːz/"
+    },
+    {
+      "en": "handbag",
+      "zh": "手袋",
+      "kind": "word",
+      "note": "hand（手）+ bag（包）",
+      "phonetic": "/ˈhændbæɡ/"
+    },
+    {
+      "en": "pardon",
+      "zh": "请再说一遍",
+      "kind": "word",
+      "note": "没听清时的礼貌用语",
+      "phonetic": "/ˈpɑːdn/"
+    },
+    {
+      "en": "thank",
+      "zh": "感谢",
+      "kind": "word",
+      "note": "thank you 表示谢谢",
+      "phonetic": "/θæŋk/"
+    },
+    {
+      "en": "very",
+      "zh": "非常",
+      "kind": "word",
+      "note": "修饰形容词或副词",
+      "phonetic": "/ˈveri/"
+    },
+    {
+      "en": "much",
+      "zh": "许多，很",
+      "kind": "word",
+      "note": "very much 表示非常",
+      "phonetic": "/mʌtʃ/"
+    },
+    {
+      "en": "your",
+      "zh": "你的，你们的",
+      "kind": "word",
+      "note": "形容词性物主代词",
+      "phonetic": "/jɔː(r)/"
+    },
+    {
+      "en": "it",
+      "zh": "它",
+      "kind": "word",
+      "note": "第三人称单数代词",
+      "phonetic": "/ɪt/"
+    },
+    {
+      "en": "Excuse me",
+      "zh": "对不起，打扰一下",
+      "kind": "phrase",
+      "note": "引起别人注意或表示歉意",
+      "phonetic": ""
+    },
+    {
+      "en": "Thank you very much",
+      "zh": "非常感谢",
+      "kind": "phrase",
+      "note": "比 Thank you 更强调感谢",
+      "phonetic": ""
+    },
+    {
+      "en": "Is this your handbag?",
+      "zh": "这是你的手袋吗？",
+      "kind": "sentence",
+      "note": "询问物品归属的句型",
+      "phonetic": ""
+    },
+    {
+      "en": "Yes, it is.",
+      "zh": "是的，它是。",
+      "kind": "sentence",
+      "note": "对一般疑问句的肯定回答",
+      "phonetic": ""
+    },
+    {
+      "en": "Thank you very much.",
+      "zh": "非常感谢。",
+      "kind": "sentence",
+      "note": "表达强烈感谢的常用句",
+      "phonetic": ""
+    },
+    {
+      "en": "your handbag",
+      "zh": "你的手袋",
+      "note": "your 后面接名词，表示物品属于谁。",
+      "phonetic": "",
+      "kind": "phrase"
+    },
+    {
+      "en": "very much",
+      "zh": "非常",
+      "note": "在 Thank you 后面加 very much，表达更强的感谢。",
+      "phonetic": "",
+      "kind": "phrase"
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "男士问女士什么问题？",
+      "options": [
+        "这是你的手袋吗？",
+        "这是你的帽子吗？",
+        "这是你的书吗？",
+        "这是你的鞋子吗？"
+      ],
+      "answer": 0,
+      "explanation": "课文原文是 Is this your handbag?，男士在问这是不是女士的手袋。"
+    },
+    {
+      "prompt": "女士一开始没听清，她说了什么？",
+      "options": [
+        "Yes?",
+        "Pardon?",
+        "Thank you.",
+        "Excuse me."
+      ],
+      "answer": 1,
+      "explanation": "课文原文是 Pardon?，女士没听清，请男士再说一遍。"
+    },
+    {
+      "prompt": "手袋是谁的？",
+      "options": [
+        "男士的",
+        "女士的",
+        "小朋友的",
+        "不知道是谁的"
+      ],
+      "answer": 1,
+      "explanation": "女士回答 Yes, it is.，说明手袋是她自己的。"
+    },
+    {
+      "prompt": "女士最后对男士说了什么？",
+      "options": [
+        "Excuse me!",
+        "Pardon?",
+        "Thank you very much.",
+        "Yes?"
+      ],
+      "answer": 2,
+      "explanation": "课文最后一句是 Thank you very much.，女士向男士表示感谢。"
+    }
+  ],
+  "id": "lesson2",
+  "published": true,
+  "sources": [
+    "courses/lesson2-page1.jpg"
+  ],
+  "createdAt": 1794053050874
+}

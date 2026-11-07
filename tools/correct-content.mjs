@@ -1,0 +1,21 @@
+import fs from 'node:fs/promises';
+const folder='app/src/main/assets/courses/';
+const a=JSON.parse(await fs.readFile(folder+'lesson1.json','utf8'));
+const additions=[['blue','蓝色','/bluː/'],['black','黑色','/blæk/'],['red','红色','/red/'],['yellow','黄色','/ˈjeləʊ/'],['green','绿色','/ɡriːn/'],['know','知道；了解','/nəʊ/']];
+for(const [en,zh,phonetic]of additions)if(!a.vocabulary.some(x=>x.en===en))a.vocabulary.push({en,zh,phonetic,kind:'word',note:en==='know'?'know about 表示“了解”。':'用来描述事物的颜色。'});
+a.note='已逐页核对正文；词汇同时包含原文词形与常用原形。';
+await fs.writeFile(folder+'lesson1.json',JSON.stringify(a,null,2));
+const b=JSON.parse(await fs.readFile(folder+'lesson2.json','utf8'));
+b.vocabulary=b.vocabulary.filter(x=>x.kind!=='phrase'||!['Is this your handbag?','Yes, it is'].includes(x.en));
+for(const [en,zh,note]of [['your handbag','你的手袋','your 后面接名词，表示物品属于谁。'],['very much','非常','在 Thank you 后面加 very much，表达更强的感谢。']])if(!b.vocabulary.some(x=>x.en===en&&x.kind==='phrase'))b.vocabulary.push({en,zh,note,phonetic:'',kind:'phrase'});
+await fs.writeFile(folder+'lesson2.json',JSON.stringify(b,null,2));
+const c=JSON.parse(await fs.readFile(folder+'lesson3.json','utf8'));
+for(const v of c.vocabulary)if(['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].includes(v.en))v.note='星期名称的首字母大写；表示在这一天时用 on。';
+await fs.writeFile(folder+'lesson3.json',JSON.stringify(c,null,2));
+const d=JSON.parse(await fs.readFile(folder+'lesson4.json','utf8'));
+for(const v of d.vocabulary)if(v.note.includes('间接引语'))v.note='直接引语：引号里保留人物说出的原话，其中 is typing 是现在进行时。';
+const split=[];
+for(const s of d.sentences){if(s.en.startsWith("He said, 'Pauline") && s.en.includes("She can")){split.push({...s,en:"He said, 'Pauline is typing letters.",zh:'他说：“波琳正在打信。'});split.push({...s,en:"She can't speak to you now!'",zh:'她现在不能和你说话！”'});}else if(s.en.startsWith("I said, 'This is") && s.en.includes("Please don")){split.push({...s,en:"I said, 'This is Pauline's mother.",zh:'我说：“我是波琳的妈妈。'});split.push({...s,en:"Please don't telephone my daughter again!'",zh:'请不要再给我女儿打电话了！”'});}else split.push(s);}
+d.sentences=split;d.note='已核对两页正文。引语里的完整句子分开列出，保留引号和说话人。';
+await fs.writeFile(folder+'lesson4.json',JSON.stringify(d,null,2));
+console.log('Content corrections saved.');

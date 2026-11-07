@@ -1,0 +1,3 @@
+<resources>
+    <style name="NavigationTheme" parent="AppTheme"><item name="android:windowLightNavigationBar">true</item></style>
+</resources>

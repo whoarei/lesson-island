@@ -1,0 +1,11 @@
+# Local signing configuration. Copy this file to .local/signing.properties.
+# Never put your credentials in this example file or commit the private file.
+# Use forward slashes in Windows paths. Literal backslashes in values must be doubled.
+storeFile=E:/Android/libb.keystore
+
+# Fill the keystore password and the exact private-key alias.
+storePassword=
+keyAlias=
+
+# Leave blank when the key password is the same as storePassword.
+keyPassword=

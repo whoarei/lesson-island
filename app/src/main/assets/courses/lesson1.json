@@ -1,0 +1,249 @@
+{
+  "title": "The Olympic Games",
+  "subtitle": "奥运会",
+  "note": "已逐页核对正文；词汇同时包含原文词形与常用原形。",
+  "sentences": [
+    {
+      "en": "Good afternoon, boys and girls.",
+      "zh": "下午好，孩子们。",
+      "speaker": "Mr. Wang"
+    },
+    {
+      "en": "Did you watch the Olympic Games on TV?",
+      "zh": "你们在电视上观看奥运会了吗？",
+      "speaker": "Mr. Wang"
+    },
+    {
+      "en": "Yes, we did.",
+      "zh": "是的，我们看了。",
+      "speaker": "Yang Ming"
+    },
+    {
+      "en": "What do you know about the Olympic Games?",
+      "zh": "你们对奥运会了解多少？",
+      "speaker": "Mr. Wang"
+    },
+    {
+      "en": "They take place every four years.",
+      "zh": "它们每四年举行一次。",
+      "speaker": "Yang Ming"
+    },
+    {
+      "en": "There are Summer Olympics and Winter Olympics.",
+      "zh": "有夏季奥运会和冬季奥运会。",
+      "speaker": "Yang Ming"
+    },
+    {
+      "en": "Right.",
+      "zh": "对。",
+      "speaker": "Mr. Wang"
+    },
+    {
+      "en": "There are five rings on the Olympic Flag.",
+      "zh": "奥运旗帜上有五个圆环。",
+      "speaker": "Julia"
+    },
+    {
+      "en": "What color are they?",
+      "zh": "它们是什么颜色的？",
+      "speaker": "Mr. Wang"
+    },
+    {
+      "en": "They are blue, black, red, yellow and green.",
+      "zh": "它们是蓝色、黑色、红色、黄色和绿色的。",
+      "speaker": "Julia"
+    },
+    {
+      "en": "Very good answers.",
+      "zh": "回答得非常好。",
+      "speaker": "Mr. Wang"
+    }
+  ],
+  "vocabulary": [
+    {
+      "en": "Olympic Games",
+      "zh": "奥运会",
+      "kind": "phrase",
+      "note": "专有名词，首字母大写。",
+      "phonetic": ""
+    },
+    {
+      "en": "take place",
+      "zh": "举行；发生",
+      "kind": "phrase",
+      "note": "不及物动词短语，没有被动语态。",
+      "phonetic": ""
+    },
+    {
+      "en": "every four years",
+      "zh": "每四年",
+      "kind": "phrase",
+      "note": "every + 基数词 + 复数名词，表示频率。",
+      "phonetic": ""
+    },
+    {
+      "en": "Summer Olympics",
+      "zh": "夏季奥运会",
+      "kind": "phrase",
+      "note": "专有名词，首字母大写。",
+      "phonetic": ""
+    },
+    {
+      "en": "Winter Olympics",
+      "zh": "冬季奥运会",
+      "kind": "phrase",
+      "note": "专有名词，首字母大写。",
+      "phonetic": ""
+    },
+    {
+      "en": "Olympic Flag",
+      "zh": "奥运旗帜",
+      "kind": "phrase",
+      "note": "专有名词，首字母大写。",
+      "phonetic": ""
+    },
+    {
+      "en": "watch",
+      "zh": "观看",
+      "kind": "word",
+      "note": "动词，常与 TV, film 等连用。",
+      "phonetic": "/wɒtʃ/"
+    },
+    {
+      "en": "ring",
+      "zh": "圆环；戒指",
+      "kind": "word",
+      "note": "名词，复数形式为 rings。",
+      "phonetic": "/rɪŋ/"
+    },
+    {
+      "en": "color",
+      "zh": "颜色",
+      "kind": "word",
+      "note": "名词，美式拼写为 color，英式为 colour。",
+      "phonetic": "/ˈkʌlə(r)/"
+    },
+    {
+      "en": "answer",
+      "zh": "回答；答案",
+      "kind": "word",
+      "note": "名词或动词，复数形式为 answers。",
+      "phonetic": "/ˈɑːnsə(r)/"
+    },
+    {
+      "en": "Did you watch the Olympic Games on TV?",
+      "zh": "你们在电视上观看奥运会了吗？",
+      "kind": "sentence",
+      "note": "一般过去时的一般疑问句，用 Did 提问，动词用原形。",
+      "phonetic": ""
+    },
+    {
+      "en": "What do you know about the Olympic Games?",
+      "zh": "你们对奥运会了解多少？",
+      "kind": "sentence",
+      "note": "What 引导的特殊疑问句，know about 表示“对……了解”。",
+      "phonetic": ""
+    },
+    {
+      "en": "There are five rings on the Olympic Flag.",
+      "zh": "奥运旗帜上有五个圆环。",
+      "kind": "sentence",
+      "note": "There be 句型，表示“某处有某物”。",
+      "phonetic": ""
+    },
+    {
+      "en": "blue",
+      "zh": "蓝色",
+      "phonetic": "/bluː/",
+      "kind": "word",
+      "note": "用来描述事物的颜色。"
+    },
+    {
+      "en": "black",
+      "zh": "黑色",
+      "phonetic": "/blæk/",
+      "kind": "word",
+      "note": "用来描述事物的颜色。"
+    },
+    {
+      "en": "red",
+      "zh": "红色",
+      "phonetic": "/red/",
+      "kind": "word",
+      "note": "用来描述事物的颜色。"
+    },
+    {
+      "en": "yellow",
+      "zh": "黄色",
+      "phonetic": "/ˈjeləʊ/",
+      "kind": "word",
+      "note": "用来描述事物的颜色。"
+    },
+    {
+      "en": "green",
+      "zh": "绿色",
+      "phonetic": "/ɡriːn/",
+      "kind": "word",
+      "note": "用来描述事物的颜色。"
+    },
+    {
+      "en": "know",
+      "zh": "知道；了解",
+      "phonetic": "/nəʊ/",
+      "kind": "word",
+      "note": "know about 表示“了解”。"
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "奥运会多久举行一次？",
+      "options": [
+        "每两年一次",
+        "每三年一次",
+        "每四年一次",
+        "每五年一次"
+      ],
+      "answer": 2,
+      "explanation": "根据课文 Yang Ming 所说的 'They take place every four years.'（它们每四年举行一次），可知答案是每四年一次。"
+    },
+    {
+      "prompt": "奥运旗帜上有几个圆环？",
+      "options": [
+        "三个",
+        "四个",
+        "五个",
+        "六个"
+      ],
+      "answer": 2,
+      "explanation": "根据课文 Julia 所说的 'There are five rings on the Olympic Flag.'（奥运旗帜上有五个圆环），可知答案是五个。"
+    },
+    {
+      "prompt": "奥运旗帜上的圆环是什么颜色的？",
+      "options": [
+        "蓝色、黑色、红色、黄色和绿色",
+        "蓝色、白色、红色、黄色和绿色",
+        "蓝色、黑色、白色、黄色和绿色",
+        "蓝色、黑色、红色、白色和绿色"
+      ],
+      "answer": 0,
+      "explanation": "根据课文 Julia 所说的 'They are blue, black, red, yellow and green.'（它们是蓝色、黑色、红色、黄色和绿色的），可知颜色包含黑色和红色，不包含白色。"
+    },
+    {
+      "prompt": "根据课文，奥运会分为哪两类？",
+      "options": [
+        "夏季奥运会和冬季奥运会",
+        "夏季奥运会和春季奥运会",
+        "冬季奥运会和秋季奥运会",
+        "夏季奥运会和秋季奥运会"
+      ],
+      "answer": 0,
+      "explanation": "根据课文 Yang Ming 所说的 'There are Summer Olympics and Winter Olympics.'（有夏季奥运会和冬季奥运会），可知分为夏季和冬季两类。"
+    }
+  ],
+  "id": "lesson1",
+  "published": true,
+  "sources": [
+    "courses/lesson1-page1.jpg"
+  ],
+  "createdAt": 1794053012918
+}

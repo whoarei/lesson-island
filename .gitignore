@@ -1,0 +1,23 @@
+.gradle/
+build/
+app/build/
+local.properties
+llm info.txt
+*.jks
+*.keystore
+test-results/private-*
+tools/local-*
+.local/
+signing.properties
+keystore.properties
+.idea/
+*.iml
+test-results/
+deliverables/*.apk
+deliverables/*.zip
+deliverables/SHA256SUMS.txt
+deliverables/课程素材/
+deliverables/界面截图/
+deliverables/archive-original-package/
+Thumbs.db
+.DS_Store

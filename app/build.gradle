@@ -1,0 +1,63 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'top.mossmoss.lessonisland'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'top.mossmoss.lessonisland'
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+    def localSigning = rootProject.file('.local/signing.properties')
+    def signingValues = new Properties()
+    if (localSigning.exists()) {
+        localSigning.withReader('UTF-8') { signingValues.load(it) }
+    }
+    def userKeystore = rootProject.file(signingValues.getProperty('storeFile', 'E:/Android/libb.keystore').trim())
+    def userStorePassword = signingValues.getProperty('storePassword', '')
+    def userKeyAlias = signingValues.getProperty('keyAlias', '').trim()
+    def userKeyPassword = signingValues.getProperty('keyPassword', '')
+    if (userKeyPassword.isEmpty()) userKeyPassword = userStorePassword
+
+    signingConfigs {
+        localUser {
+            storeFile userKeystore
+            storePassword userStorePassword
+            keyAlias userKeyAlias
+            keyPassword userKeyPassword
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.localUser }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.localUser
+        }
+    }
+    tasks.configureEach { task ->
+        if (task.name in ['validateSigningDebug', 'validateSigningRelease']) {
+            task.doFirst {
+                if (!localSigning.isFile()) {
+                    throw new GradleException('Create .local/signing.properties from signing.properties.example and fill your keystore credentials.')
+                }
+                def missing = []
+                if (userStorePassword.isEmpty()) missing.add('storePassword')
+                if (userKeyAlias.isEmpty()) missing.add('keyAlias')
+                if (!missing.isEmpty()) {
+                    throw new GradleException('Fill .local/signing.properties: ' + missing.join(', ') + '. keyPassword may be blank to reuse storePassword.')
+                }
+                if (!userKeystore.isFile()) {
+                    throw new GradleException('Signing keystore does not exist: ' + userKeystore)
+                }
+            }
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    useLibrary 'android.test.runner'
+    useLibrary 'android.test.base'
+    testOptions { unitTests.returnDefaultValues = true }
+}
+dependencies { testImplementation 'junit:junit:4.13.2' }

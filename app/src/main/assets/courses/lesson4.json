@@ -1,0 +1,290 @@
+{
+  "title": "Lesson 71 He's awful!",
+  "subtitle": "他讨厌透了！",
+  "note": "已核对两页正文。引语里的完整句子分开列出，保留引号和说话人。",
+  "sentences": [
+    {
+      "en": "What's Ron Marston like, Pauline?",
+      "zh": "罗恩·马斯顿是个什么样的人，波琳？",
+      "speaker": "JANE"
+    },
+    {
+      "en": "He's awful!",
+      "zh": "他讨厌透了！",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "He telephoned me four times yesterday, and three times the day before yesterday.",
+      "zh": "他昨天给我打了四次电话，前天打了三次。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "He telephoned the office yesterday morning and yesterday afternoon.",
+      "zh": "他昨天上午和下午都给办公室打了电话。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "My boss answered the telephone.",
+      "zh": "我的老板接了电话。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "What did your boss say to him?",
+      "zh": "你的老板对他说了什么？",
+      "speaker": "JANE"
+    },
+    {
+      "en": "He said, 'Pauline is typing letters.",
+      "zh": "他说：“波琳正在打信。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "She can't speak to you now!'",
+      "zh": "她现在不能和你说话！”",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "Then I arrived home at six o'clock yesterday evening.",
+      "zh": "然后我昨天晚上六点到家。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "He telephoned again.",
+      "zh": "他又打电话了。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "But I didn't answer the phone!",
+      "zh": "但我没接电话！",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "Did he telephone again last night?",
+      "zh": "他昨晚又打电话了吗？",
+      "speaker": "JANE"
+    },
+    {
+      "en": "Yes, he did.",
+      "zh": "是的，他打了。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "He telephoned at nine o'clock.",
+      "zh": "他九点打的电话。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "What did you say to him?",
+      "zh": "你对他说了什么？",
+      "speaker": "JANE"
+    },
+    {
+      "en": "I said, 'This is Pauline's mother.",
+      "zh": "我说：“我是波琳的妈妈。",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "Please don't telephone my daughter again!'",
+      "zh": "请不要再给我女儿打电话了！”",
+      "speaker": "PAULINE"
+    },
+    {
+      "en": "Did he telephone again?",
+      "zh": "他又打电话了吗？",
+      "speaker": "JANE"
+    },
+    {
+      "en": "No, he didn't!",
+      "zh": "不，他没有！",
+      "speaker": "PAULINE"
+    }
+  ],
+  "vocabulary": [
+    {
+      "en": "awful",
+      "zh": "糟糕的，讨厌的",
+      "kind": "word",
+      "note": "形容词，常用来形容人或事很糟糕。",
+      "phonetic": "/ˈɔːfl/"
+    },
+    {
+      "en": "telephoned",
+      "zh": "打电话",
+      "kind": "word",
+      "note": "动词 telephone 的过去式。",
+      "phonetic": "/ˈtelɪfəʊnd/"
+    },
+    {
+      "en": "yesterday",
+      "zh": "昨天",
+      "kind": "word",
+      "note": "时间副词，常与过去时连用。",
+      "phonetic": "/ˈjestədeɪ/"
+    },
+    {
+      "en": "office",
+      "zh": "办公室",
+      "kind": "word",
+      "note": "名词，工作的地方。",
+      "phonetic": "/ˈɒfɪs/"
+    },
+    {
+      "en": "boss",
+      "zh": "老板",
+      "kind": "word",
+      "note": "名词，指上级或雇主。",
+      "phonetic": "/bɒs/"
+    },
+    {
+      "en": "typing",
+      "zh": "打字",
+      "kind": "word",
+      "note": "动词 type 的现在分词，构成进行时。",
+      "phonetic": "/ˈtaɪpɪŋ/"
+    },
+    {
+      "en": "letters",
+      "zh": "信件",
+      "kind": "word",
+      "note": "名词 letter 的复数形式。",
+      "phonetic": "/ˈletəz/"
+    },
+    {
+      "en": "arrived",
+      "zh": "到达",
+      "kind": "word",
+      "note": "动词 arrive 的过去式。",
+      "phonetic": "/əˈraɪvd/"
+    },
+    {
+      "en": "answer",
+      "zh": "接（电话），回答",
+      "kind": "word",
+      "note": "动词，这里指接听电话。",
+      "phonetic": "/ˈɑːnsə/"
+    },
+    {
+      "en": "daughter",
+      "zh": "女儿",
+      "kind": "word",
+      "note": "名词，指女儿。",
+      "phonetic": "/ˈdɔːtə/"
+    },
+    {
+      "en": "the day before yesterday",
+      "zh": "前天",
+      "kind": "phrase",
+      "note": "固定短语，表示比昨天更早的一天。",
+      "phonetic": ""
+    },
+    {
+      "en": "yesterday morning",
+      "zh": "昨天上午",
+      "kind": "phrase",
+      "note": "时间短语，表示昨天的早上。",
+      "phonetic": ""
+    },
+    {
+      "en": "yesterday afternoon",
+      "zh": "昨天下午",
+      "kind": "phrase",
+      "note": "时间短语，表示昨天的下午。",
+      "phonetic": ""
+    },
+    {
+      "en": "arrived home",
+      "zh": "到家",
+      "kind": "phrase",
+      "note": "动词短语，home 前不加 to。",
+      "phonetic": ""
+    },
+    {
+      "en": "answer the telephone",
+      "zh": "接电话",
+      "kind": "phrase",
+      "note": "动词短语，表示接听电话。",
+      "phonetic": ""
+    },
+    {
+      "en": "speak to you",
+      "zh": "和你说话",
+      "kind": "phrase",
+      "note": "动词短语，表示与某人交谈。",
+      "phonetic": ""
+    },
+    {
+      "en": "He telephoned me four times yesterday, and three times the day before yesterday.",
+      "zh": "他昨天给我打了四次电话，前天打了三次。",
+      "kind": "sentence",
+      "note": "描述过去发生的动作次数。",
+      "phonetic": ""
+    },
+    {
+      "en": "He said, 'Pauline is typing letters. She can't speak to you now!'",
+      "zh": "他说：“波琳正在打信。她现在不能和你说话！”",
+      "kind": "sentence",
+      "note": "直接引语：引号里保留人物说出的原话，其中 is typing 是现在进行时。",
+      "phonetic": ""
+    },
+    {
+      "en": "I said, 'This is Pauline's mother. Please don't telephone my daughter again!'",
+      "zh": "我说：“我是波琳的妈妈。请不要再给我女儿打电话了！”",
+      "kind": "sentence",
+      "note": "电话用语，表示身份并提出请求。",
+      "phonetic": ""
+    }
+  ],
+  "questions": [
+    {
+      "prompt": "罗恩·马斯顿昨天给波琳打了几次电话？",
+      "options": [
+        "三次",
+        "四次",
+        "五次",
+        "两次"
+      ],
+      "answer": 1,
+      "explanation": "课文中波琳说：'He telephoned me four times yesterday'，即昨天打了四次。"
+    },
+    {
+      "prompt": "当罗恩给办公室打电话时，是谁接的电话？",
+      "options": [
+        "波琳",
+        "简",
+        "波琳的老板",
+        "波琳的妈妈"
+      ],
+      "answer": 2,
+      "explanation": "课文中波琳说：'My boss answered the telephone.'，即她的老板接了电话。"
+    },
+    {
+      "prompt": "昨晚九点罗恩打电话时，波琳是怎么回答他的？",
+      "options": [
+        "她说她在打信",
+        "她假装是波琳的妈妈",
+        "她没有接电话",
+        "她让老板接电话"
+      ],
+      "answer": 1,
+      "explanation": "课文中波琳说：'I said, \"This is Pauline's mother...\"'，即她假装是波琳的妈妈。"
+    },
+    {
+      "prompt": "在波琳假装是她妈妈之后，罗恩又打电话了吗？",
+      "options": [
+        "是的，他又打了",
+        "没有，他没再打",
+        "他打了两次",
+        "他给办公室打了"
+      ],
+      "answer": 1,
+      "explanation": "课文中简问：'Did he telephone again?'，波琳回答：'No, he didn't!'，即没有再打。"
+    }
+  ],
+  "id": "lesson4",
+  "published": true,
+  "sources": [
+    "courses/lesson4-page1.jpg",
+    "courses/lesson4-page2.jpg"
+  ],
+  "createdAt": 1794053092661
+}
