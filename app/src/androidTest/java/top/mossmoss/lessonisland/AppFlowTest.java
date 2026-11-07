@@ -347,7 +347,7 @@ public class AppFlowTest extends InstrumentationTestCase {
     assertEquals(2, new Store(context).courses(false).size());
   }
 
-  public void testApiKeyVisibilityAndSavedValue() throws Exception {
+  public void testApiKeyVisibilityDoesNotRevealSavedValue() throws Exception {
     Context context = isolatedContext("key_visibility_");
     Secrets isolated = new Secrets(context);
     String saved = "test-only-visibility-value";
@@ -360,15 +360,16 @@ public class AppFlowTest extends InstrumentationTestCase {
             app.secrets = isolated;
             app.parent = true;
             app.settings();
-            assertEquals(saved, app.apiKeyInput.getText().toString());
+            assertEquals("", app.apiKeyInput.getText().toString());
+            assertEquals("已保存密钥；留空保持当前密钥", app.apiKeyInput.getHint());
             assertTrue(
                 app.apiKeyInput.getTransformationMethod()
                     instanceof android.text.method.PasswordTransformationMethod);
-            app.apiKeyInput.setSelection(5);
             app.apiKeyToggle.performClick();
             assertTrue(app.apiKeyVisible);
             assertNull(app.apiKeyInput.getTransformationMethod());
-            assertEquals(5, app.apiKeyInput.getSelectionStart());
+            assertEquals("", app.apiKeyInput.getText().toString());
+            assertEquals(saved, isolated.get());
             assertEquals("隐藏 API 密钥", app.apiKeyToggle.getContentDescription());
             app.apiKeyInput.setText(changed);
             app.apiKeyInput.setSelection(3);
@@ -380,9 +381,19 @@ public class AppFlowTest extends InstrumentationTestCase {
       assertEquals(changed, isolated.get());
       ui(
           () -> {
-            assertEquals(changed, app.apiKeyInput.getText().toString());
+            assertEquals("", app.apiKeyInput.getText().toString());
             assertFalse(app.apiKeyVisible);
             app.apiKeyToggle.performClick();
+            assertEquals("", app.apiKeyInput.getText().toString());
+          });
+      click("保存 API 设置");
+      assertEquals("Blank input must keep the saved key", changed, isolated.get());
+      ui(
+          () -> {
+            assertEquals("", app.apiKeyInput.getText().toString());
+            app.apiKeyInput.setText("test-only-unsaved-input");
+            app.apiKeyToggle.performClick();
+            assertTrue(app.apiKeyVisible);
             getInstrumentation().callActivityOnPause(app);
             assertFalse(app.apiKeyVisible);
             assertTrue(
@@ -394,6 +405,7 @@ public class AppFlowTest extends InstrumentationTestCase {
             app.courses();
             assertEquals("", oldField.getText().toString());
             assertNull(app.apiKeyInput);
+            assertEquals(changed, isolated.get());
           });
     } finally {
       ui(

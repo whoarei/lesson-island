@@ -1938,13 +1938,10 @@ public final class MainActivity extends Activity {
     LinearLayout config = card(body);
     add(config, text("模型与语音服务", 21, INK, true));
     space(config, 8);
+    boolean hasSavedKey = !secrets.get().isEmpty();
     add(
         config,
-        text(
-            secrets.get().isEmpty() ? "尚未配置 API。可直接导入 llm info.txt。" : "API 密钥已加密保存在本机。",
-            14,
-            MUTED,
-            false));
+        text(hasSavedKey ? "API 密钥已加密保存在本机。" : "尚未配置 API。可直接导入 llm info.txt。", 14, MUTED, false));
     action(config, "导入 llm info.txt 配置", true, () -> pickFile(102, "text/*"));
     EditText base = field(config, "API 地址（HTTPS）", ai.base(), false),
         model = field(config, "图片识别与课程模型", ai.model(), false),
@@ -1954,7 +1951,7 @@ public final class MainActivity extends Activity {
                 "语音模型",
                 getSharedPreferences("config", 0).getString("tts", "mimo-v2.5-tts"),
                 false),
-        key = apiKeyField(config, secrets.get());
+        key = apiKeyField(config, hasSavedKey);
     action(
         config,
         "保存 API 设置",
@@ -2100,7 +2097,7 @@ public final class MainActivity extends Activity {
             false));
   }
 
-  EditText apiKeyField(LinearLayout target, String value) {
+  EditText apiKeyField(LinearLayout target, boolean hasSavedKey) {
     space(target, 10);
     LinearLayout container = row();
     container.setBackground(outline(Color.WHITE, LINE));
@@ -2108,7 +2105,7 @@ public final class MainActivity extends Activity {
     input.setTextSize(16);
     input.setTextColor(INK);
     input.setHintTextColor(MUTED);
-    input.setHint("API Key");
+    input.setHint(hasSavedKey ? "已保存密钥；留空保持当前密钥" : "API Key");
     input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
     input.setSingleLine(true);
     input.setSaveEnabled(false);
@@ -2116,7 +2113,6 @@ public final class MainActivity extends Activity {
     input.setPadding(dp(14), dp(13), dp(4), dp(13));
     input.setMinHeight(dp(51));
     input.setBackgroundColor(Color.TRANSPARENT);
-    input.setText(value);
     weight(container, input);
     ImageButton toggle = new ImageButton(this);
     toggle.setBackground(shape(Color.TRANSPARENT, 12));
