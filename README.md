@@ -48,6 +48,8 @@ Android 文件选择器只显示手机中的文件。将电脑上的 `llm info.t
 
 ## 构建
 
+本项目的发布流程由 [课文岛版本发布技能](skills/lesson-island-release/SKILL.md) 维护，可通过 `$lesson-island-release` 调用。发布使用 `x.y.z` 版本号；未指定本次版本号时，必须先向用户确认。
+
 环境：JDK 17–24、Android SDK 36、Build Tools、联网下载首次 Gradle 依赖。本机已使用 `E:\Android\sdk` 和 JDK 24 验证。
 
 ```powershell
