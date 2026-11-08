@@ -1413,8 +1413,18 @@ public final class MainActivity extends Activity {
                                     dialog.dismiss();
                                     destination.run();
                                   })));
-          dialog.show();
+          showPinDialog(dialog, input);
         });
+  }
+
+  void showPinDialog(AlertDialog dialog, EditText input) {
+    input.requestFocus();
+    dialog
+        .getWindow()
+        .setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
+                | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+    dialog.show();
   }
 
   void dashboard() throws Exception {
@@ -2388,6 +2398,9 @@ public final class MainActivity extends Activity {
           EditText old = field(f, "当前 PIN", "", true),
               next = field(f, "新的 4 位数字 PIN", "", true),
               confirm = field(f, "再输入新 PIN", "", true);
+          for (EditText input : new EditText[] {old, next, confirm})
+            input.setInputType(
+                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
           AlertDialog d =
               new AlertDialog.Builder(this)
                   .setTitle("修改家长 PIN")
@@ -2412,7 +2425,7 @@ public final class MainActivity extends Activity {
                                     d.dismiss();
                                     toast("PIN 已修改");
                                   })));
-          d.show();
+          showPinDialog(d, old);
         });
     action(
         security,
