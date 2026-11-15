@@ -30,6 +30,7 @@ public final class MainActivity extends Activity {
   Audio audio;
   Secrets secrets;
   AiClient ai;
+  AppUpdateFlow appUpdates;
   final ExecutorService jobs = Executors.newSingleThreadExecutor();
   boolean parent = false, busy = false, externalPending = false, relock = false;
   LinearLayout shell, body, header, bottom, actionFooter;
@@ -60,7 +61,20 @@ public final class MainActivity extends Activity {
   String sessionCourse = "";
   long started;
   long activeMillis, activeTick;
-  boolean reviewing = false, answered = false;
+  final StudyTime studyClock = new StudyTime();
+  final Handler studyHandler = new Handler(Looper.getMainLooper());
+  boolean activityForeground = true, studyPulseRunning;
+  final Runnable studyPulse =
+      new Runnable() {
+        @Override
+        public void run() {
+          if (!studyPulseRunning) return;
+          accrueClock();
+          persistSessionClock();
+          studyHandler.postDelayed(this, 2000);
+        }
+      };
+  boolean reviewing = false, replaying = false, reviewOnlyMistakes = false, answered = false;
   int readingIndex;
   float readingSpeed = 1f;
   Runnable readingControlsChanged;
@@ -81,6 +95,7 @@ public final class MainActivity extends Activity {
       secrets = new Secrets(this);
       ai = new AiClient(this);
       audio = new Audio(this, store);
+      appUpdates = new AppUpdateFlow(this);
       home();
     } catch (Exception e) {
       new AlertDialog.Builder(this)
@@ -266,6 +281,7 @@ public final class MainActivity extends Activity {
   }
 
   void screen(String name, String title, boolean nav) {
+    if (appUpdates != null) appUpdates.onPageChanged();
     if ((page.equals("materials") || readingControlsChanged != null) && audio != null) audio.stop();
     readingControlsChanged = null;
     materialCards.clear();
@@ -282,9 +298,9 @@ public final class MainActivity extends Activity {
     if (apiKeyInput != null) apiKeyInput.setText("");
     apiKeyInput = null;
     apiKeyToggle = null;
-    if (page.equals("quiz") && !name.equals("quiz")) pauseClock();
+    pauseClock();
     page = name;
-    if (name.equals("quiz") && activeTick == 0) activeTick = SystemClock.elapsedRealtime();
+    resumeClock();
     statusView = null;
     materialControlsChanged = null;
     serviceControlsChanged = null;
@@ -455,7 +471,7 @@ public final class MainActivity extends Activity {
           meta.addView(gap, new LinearLayout.LayoutParams(dp(12), 1));
           weight(meta, pill("↻  " + store.due(false).size() + " 项待复习", GREEN, Color.WHITE));
           add(hero, meta);
-          JSONObject pending = store.state.optJSONObject("session");
+          JSONObject pending = store.latestCourseSession();
           if (pending != null) {
             action(body, "继续上次学习  →", true, () -> resumeSession());
             space(body, 18);
@@ -647,21 +663,21 @@ public final class MainActivity extends Activity {
 
   void begin(String id, int stage) throws Exception {
     JSONObject c = store.course(id);
-    if (!c.optBoolean("published") || stage > store.progress(id).optInt("completed"))
+    int completed = store.progress(id).optInt("completed");
+    if (!c.optBoolean("published") || stage < 0 || stage > completed || stage >= Learning.STAGES.length)
       throw new Exception("请先完成上一关");
-    if (store.state.has("session")) {
-      new AlertDialog.Builder(this)
-          .setTitle("继续还是重新开始？")
-          .setMessage("已有保存的学习进度。新开一关会替换未完成的本次练习；已完成关卡和错题会保留。")
-          .setPositiveButton("开始本关", (d, w) -> safe(() -> newSession(id, stage)))
-          .setNegativeButton("继续上次", (d, w) -> safe(this::resumeSession))
-          .show();
-    } else newSession(id, stage);
+    JSONObject saved = store.courseSession(id);
+    if (stage == completed && saved != null && saved.optInt("stage", -1) == stage)
+      resumeSession(saved);
+    else newSession(id, stage);
   }
 
   void newSession(String id, int stage) throws Exception {
+    leaveCurrentQuiz();
     audio.stop();
     reviewing = false;
+    replaying = stage < store.progress(id).optInt("completed");
+    reviewOnlyMistakes = false;
     sessionCourse = id;
     sessionStage = stage;
     activeQuestions = store.questions(store.course(id), stage);
@@ -694,14 +710,21 @@ public final class MainActivity extends Activity {
             .put("correct", sessionCorrect)
             .put("started", started)
             .put("activeMillis", activeMillis)
-            .put("review", reviewing);
+            .put("review", reviewing)
+            .put("reviewOnlyMistakes", reviewOnlyMistakes);
     if (reviewing) {
       JSONArray qs = new JSONArray();
       for (Learning.Question q : activeQuestions) qs.put(questionJson(q));
       quizSession.put("questions", qs);
     }
-    store.state.put("session", quizSession);
-    store.save();
+    if (replaying) return;
+    if (reviewing) store.saveReviewSession(quizSession, reviewOnlyMistakes);
+    else store.saveCourseSession(quizSession);
+  }
+
+  void leaveCurrentQuiz() throws Exception {
+    if (page.equals("quiz") && activeQuestions != null && queue != null) saveSession();
+    pauseClock();
   }
 
   static JSONObject questionJson(Learning.Question q) throws Exception {
@@ -732,8 +755,19 @@ public final class MainActivity extends Activity {
   }
 
   void resumeSession() throws Exception {
-    JSONObject s = store.state.getJSONObject("session");
+    JSONObject s = store.latestCourseSession();
+    if (s == null) {
+      home();
+      return;
+    }
+    resumeSession(s);
+  }
+
+  void resumeSession(JSONObject s) throws Exception {
+    leaveCurrentQuiz();
     reviewing = s.optBoolean("review");
+    replaying = false;
+    reviewOnlyMistakes = s.optBoolean("reviewOnlyMistakes");
     sessionCourse = s.getString("course");
     sessionStage = s.getInt("stage");
     queue = s.getJSONArray("queue");
@@ -757,6 +791,7 @@ public final class MainActivity extends Activity {
       JSONObject c = store.course(sessionCourse);
       if (!c.optBoolean("published")) throw new Exception("这门课已下架，请让家长重新发布");
       activeQuestions = store.questions(c, sessionStage);
+      replaying = sessionStage < store.progress(sessionCourse).optInt("completed");
     }
     if (position >= queue.length()) {
       finishSession();
@@ -776,7 +811,7 @@ public final class MainActivity extends Activity {
       showReadingLesson();
       return;
     }
-    screen("quiz", "保存并退出", false);
+    screen("quiz", replaying ? "结束重练" : "保存并退出", false);
     selectedAnswer = "";
     ordered.clear();
     answerInput = null;
@@ -785,7 +820,8 @@ public final class MainActivity extends Activity {
         label(
             reviewing
                 ? "REVIEW & REMEMBER"
-                : "LEVEL 0" + (sessionStage + 1) + "  /  " + Learning.STAGES[sessionStage]));
+                : (replaying ? "自由重练  /  " : "LEVEL 0" + (sessionStage + 1) + "  /  ")
+                    + Learning.STAGES[sessionStage]));
     space(body, 14);
     progressBar(body, position, queue.length());
     space(body, 9);
@@ -951,8 +987,8 @@ public final class MainActivity extends Activity {
   }
 
   void showReadingLesson() throws Exception {
-    screen("quiz", "保存并退出", false);
-    add(body, label("LEVEL 01  /  初识课文"));
+    screen("quiz", replaying ? "结束重练" : "保存并退出", false);
+    add(body, label(replaying ? "自由重练  /  初识课文" : "LEVEL 01  /  初识课文"));
     space(body, 10);
     add(body, text(store.course(sessionCourse).getString("title"), 25, INK, true));
     space(body, 10);
@@ -1026,7 +1062,7 @@ public final class MainActivity extends Activity {
     answered = true;
     audio.stop();
     int remaining = queue.length() - position;
-    store.recordReading(sessionCourse, remaining);
+    if (!replaying) store.recordReading(sessionCourse, remaining);
     sessionAttempts += remaining;
     sessionCorrect += remaining;
     position = queue.length();
@@ -1056,7 +1092,7 @@ public final class MainActivity extends Activity {
       cid = q.id.substring(0, slash);
       record = readQuestion(questionJson(q).put("id", q.id.substring(slash + 1)));
     }
-    store.record(cid, record, ok, true);
+    if (!replaying) store.record(cid, record, ok, true);
     position++;
     saveSession();
     boolean choice = q.type.equals("choice") || q.type.equals("listen");
@@ -1085,7 +1121,7 @@ public final class MainActivity extends Activity {
     }
     if (!ok) {
       space(feedback, 8);
-      add(feedback, text("这道题会在本轮稍后再出现，也已收进复习站。", 13, MUTED, false));
+      add(feedback, text(replaying ? "这道题会在本轮稍后再出现。" : "这道题会在本轮稍后再出现，也已收进复习站。", 13, MUTED, false));
     }
     action(
         feedback,
@@ -1128,8 +1164,10 @@ public final class MainActivity extends Activity {
     accrueClock();
     long seconds = Math.max(1, activeMillis / 1000);
     activeTick = 0;
-    if (reviewing) {
-      store.state.remove("session");
+    if (replaying) {
+      // Free replay never replaces the saved mainline/review session or records results.
+    } else if (reviewing) {
+      store.removeReviewSession(reviewOnlyMistakes);
       store
           .state
           .getJSONArray("history")
@@ -1150,7 +1188,7 @@ public final class MainActivity extends Activity {
     LinearLayout celebration = card(body);
     celebration.setBackground(
         new AdventureArt.Face(this, AdventureArt.SKY, Color.rgb(192, 225, 240), 28, 4));
-    TextView ribbon = pill(reviewing ? "今日温习完成" : "冒险任务完成", GREEN, Color.WHITE);
+    TextView ribbon = pill(reviewing ? "今日温习完成" : replaying ? "自由重练完成" : "冒险任务完成", GREEN, Color.WHITE);
     add(celebration, ribbon);
     celebration.addView(
         new AdventureArt.Companion(this, "celebrate", true),
@@ -1161,7 +1199,11 @@ public final class MainActivity extends Activity {
     space(celebration, 8);
     TextView detail =
         text(
-            reviewing ? "今天的复习完成了，下一次再见。" : "你完成了「" + Learning.STAGES[sessionStage] + "」",
+            reviewing
+                ? "今天的复习完成了，下一次再见。"
+                : replaying
+                    ? "已完成重练，原来的学习进度仍然保留。"
+                    : "你完成了「" + Learning.STAGES[sessionStage] + "」",
             14,
             MUTED,
             false);
@@ -1211,8 +1253,12 @@ public final class MainActivity extends Activity {
     add(hero, reviewTop);
     space(hero, 8);
     add(hero, text("错题及时再练；答对的内容按记忆间隔回来。", 13, MUTED, false));
-    if (!due.isEmpty()) action(hero, "开始今日复习  →", true, () -> startReview(false));
-    if (!store.due(true).isEmpty()) action(hero, "只练错题", false, () -> startReview(true));
+    boolean pendingReview = store.reviewSession(false) != null;
+    boolean pendingMistakes = store.reviewSession(true) != null;
+    if (pendingReview || !due.isEmpty())
+      action(hero, pendingReview ? "继续今日复习  →" : "开始今日复习  →", true, () -> startReview(false));
+    if (pendingMistakes || !store.due(true).isEmpty())
+      action(hero, pendingMistakes ? "继续错题复习" : "只练错题", false, () -> startReview(true));
     if (due.isEmpty()) {
       companion(body, "今天没有到期的复习，记忆花园状态很好！", "celebrate");
       action(body, "去学习岛探险  →", true, this::home);
@@ -1244,28 +1290,35 @@ public final class MainActivity extends Activity {
   }
 
   void startReview(boolean mistakes) throws Exception {
-    if (store.state.has("session")) {
-      new AlertDialog.Builder(this)
-          .setTitle("保存的练习还没完成")
-          .setMessage("继续上次练习，或退出后重新开始复习。当前学习进度已自动保存。")
-          .setPositiveButton("继续上次", (d, w) -> safe(this::resumeSession))
-          .setNegativeButton(
-              "放弃本轮并复习",
-              (d, w) ->
-                  safe(
-                      () -> {
-                        store.state.remove("session");
-                        store.save();
-                        startReview(mistakes);
-                      }))
-          .show();
-      return;
+    JSONObject saved = store.reviewSession(mistakes);
+    if (saved != null) {
+      boolean available = true;
+      JSONArray questions = saved.optJSONArray("questions");
+      if (questions == null) available = false;
+      else
+        for (int i = 0; i < questions.length(); i++) {
+          String id = questions.getJSONObject(i).optString("id");
+          int slash = id.indexOf('/');
+          if (slash <= 0) { available = false; break; }
+          try {
+            if (!store.course(id.substring(0, slash)).optBoolean("published")) available = false;
+          } catch (FileNotFoundException e) {
+            available = false;
+          }
+        }
+      if (available) {
+        resumeSession(saved);
+        return;
+      }
+      store.removeReviewSession(mistakes);
+      store.save();
     }
     List<JSONObject> list = store.due(mistakes);
     if (list.isEmpty()) {
       toast("暂时没有到期的复习内容");
       return;
     }
+    leaveCurrentQuiz();
     activeQuestions = new ArrayList<>();
     for (JSONObject j : list.subList(0, Math.min(12, list.size()))) {
       Learning.Question q = readQuestion(j);
@@ -1273,6 +1326,8 @@ public final class MainActivity extends Activity {
       activeQuestions.add(q);
     }
     reviewing = true;
+    replaying = false;
+    reviewOnlyMistakes = mistakes;
     sessionCourse = "review";
     sessionStage = -1;
     position = 0;
@@ -1360,14 +1415,15 @@ public final class MainActivity extends Activity {
     }
     add(body, badges);
     space(body, 18);
-    int minutes = todaySeconds() / 60;
+    int studySeconds = todaySeconds();
+    int goalMinutes = store.state.optInt("goal", 10);
     LinearLayout goal = card(body);
     iconTitle(goal, "今日小目标", "leaf", LIME);
     space(goal, 8);
-    add(goal, text(minutes + " / " + store.state.optInt("goal", 10) + " 分钟", 16, GREEN, true));
+    add(goal, text((studySeconds / 60) + " 分 " + (studySeconds % 60) + " 秒 / " + goalMinutes + " 分钟", 16, GREEN, true));
     space(goal, 10);
     progressBar(
-        goal, Math.min(minutes, store.state.optInt("goal", 10)), store.state.optInt("goal", 10));
+        goal, Math.min(studySeconds, goalMinutes * 60), goalMinutes * 60);
     space(goal, 8);
     add(goal, text("专注练习，按自己的节奏前进。", 13, MUTED, false));
     add(body, text("最近的脚印", 20, INK, true));
@@ -1383,25 +1439,13 @@ public final class MainActivity extends Activity {
   }
 
   int studyDays() throws Exception {
-    Set<String> days = new HashSet<>();
-    JSONArray h = store.state.getJSONArray("history");
-    SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA);
-    for (int i = 0; i < h.length(); i++)
-      days.add(f.format(new Date(h.getJSONObject(i).getLong("time"))));
-    return days.size();
+    return StudyTimeLedger.studyDays(store.state);
   }
 
   int todaySeconds() throws Exception {
-    int n = 0;
-    SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd", Locale.CHINA);
-    String today = f.format(new Date());
-    JSONArray h = store.state.getJSONArray("history");
-    for (int i = 0; i < h.length(); i++) {
-      JSONObject x = h.getJSONObject(i);
-      if (f.format(new Date(x.getLong("time"))).equals(today))
-        n += Math.min(3600, x.optInt("seconds"));
-    }
-    return n;
+    accrueClock();
+    return (int) Math.min(Integer.MAX_VALUE,
+        StudyTimeLedger.todayMillis(store.state, System.currentTimeMillis(), java.time.ZoneId.systemDefault()) / 1000);
   }
 
   void history(boolean detailed) throws Exception {
@@ -1523,6 +1567,7 @@ public final class MainActivity extends Activity {
                                     parent = true;
                                     dialog.dismiss();
                                     destination.run();
+                                    if (appUpdates != null) appUpdates.checkAutomatically();
                                   })));
           showPinDialog(dialog, input);
         });
@@ -2634,6 +2679,7 @@ public final class MainActivity extends Activity {
     if (!parent) return;
     screen("settings", "", true);
     heading("家长设置", "制作需要联网，学习可以离线。 ");
+    if (appUpdates != null) appUpdates.addSettings(body);
     LinearLayout config = card(body);
     add(config, text("模型与语音服务", 21, INK, true));
     space(config, 8);
@@ -2979,6 +3025,7 @@ public final class MainActivity extends Activity {
   @Override
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
+    if (appUpdates != null && appUpdates.onActivityResult(request, result, data)) return;
     externalPending = false;
     if (result != RESULT_OK || data == null) {
       if (parent)
@@ -3111,10 +3158,16 @@ public final class MainActivity extends Activity {
   @Override
   protected void onResume() {
     super.onResume();
-    if (page.equals("quiz")) activeTick = SystemClock.elapsedRealtime();
+    activityForeground = true;
+    resumeClock();
+    if (appUpdates != null) appUpdates.onResume();
   }
 
-  void accrueClock() {
+  boolean isStudyPage() {
+    return activityForeground && !parent && (page.equals("quiz") || page.equals("materials"));
+  }
+
+  void accrueSessionClock() {
     if (activeTick != 0) {
       long now = SystemClock.elapsedRealtime();
       activeMillis += Math.max(0, now - activeTick);
@@ -3122,22 +3175,57 @@ public final class MainActivity extends Activity {
     }
   }
 
-  void pauseClock() {
-    accrueClock();
-    activeTick = 0;
-    if (store != null && store.state.has("session"))
+  void updateStudyClock(boolean studying) {
+    if (store == null) return;
+    safe(() -> {
+      long credited = studyClock.update(studying, SystemClock.elapsedRealtime(), System.currentTimeMillis(),
+          java.time.ZoneId.systemDefault(), (date, millis) -> StudyTimeLedger.add(store.state, date, millis));
+      if (credited > 0) store.save();
+    });
+  }
+
+  void accrueClock() {
+    accrueSessionClock();
+    updateStudyClock(isStudyPage());
+  }
+
+  void persistSessionClock() {
+    if (store != null && !replaying && page.equals("quiz"))
       safe(
           () -> {
-            store.state.getJSONObject("session").put("activeMillis", activeMillis);
-            store.save();
+            JSONObject saved = reviewing ? store.reviewSession(reviewOnlyMistakes) : store.courseSession(sessionCourse);
+            if (saved != null) {
+              saved.put("activeMillis", activeMillis);
+              store.save();
+            }
           });
+  }
+
+  void resumeClock() {
+    boolean studying = isStudyPage();
+    if (studying && page.equals("quiz") && activeTick == 0) activeTick = SystemClock.elapsedRealtime();
+    updateStudyClock(studying);
+    studyHandler.removeCallbacks(studyPulse);
+    studyPulseRunning = studying;
+    if (studying) studyHandler.postDelayed(studyPulse, 2000);
+  }
+
+  void pauseClock() {
+    studyHandler.removeCallbacks(studyPulse);
+    studyPulseRunning = false;
+    accrueSessionClock();
+    activeTick = 0;
+    updateStudyClock(false);
+    persistSessionClock();
   }
 
   @Override
   protected void onPause() {
     if (itemAudioEditor != null) itemAudioEditor.pause();
     setApiKeyVisible(false);
-    if (page.equals("quiz")) pauseClock();
+    pauseClock();
+    activityForeground = false;
+    if (appUpdates != null) appUpdates.onPause();
     super.onPause();
     if (audio != null) audio.stop();
   }
@@ -3164,6 +3252,8 @@ public final class MainActivity extends Activity {
 
   @Override
   protected void onDestroy() {
+    pauseClock();
+    if (appUpdates != null) appUpdates.close();
     if (itemAudioEditor != null) itemAudioEditor.close();
     if (lastToast != null) lastToast.cancel();
     if (audio != null) audio.close();

@@ -15,6 +15,7 @@ import zipfile
 
 from ci_check import (ROOT, RELEASE_CERTIFICATE_SHA256, apksigner, build_tools,
                       check_apk, check_tag, read_version)
+from update_metadata import manifest, read_min_sdk, write_manifest
 
 
 def sha256(path):
@@ -95,8 +96,12 @@ def prepare(unsigned_apk, output):
     source = output / f"LessonIsland-{version}-source.zip"
     subprocess.run(["git", "archive", "--format=zip", f"--output={source.resolve()}", commit], cwd=ROOT, check=True)
     check_source_archive(source)
+    update = output / "update.json"
+    repository = os.environ.get("PUBLIC_RELEASE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY", "")
+    write_manifest(update, manifest(apk, version, code, notes, repository,
+                                    read_min_sdk(ROOT / "app/build.gradle"), commit))
     (output / "SHA256SUMS.txt").write_text(
-        "".join(f"{sha256(path)}  {path.name}\n" for path in (apk, source)), encoding="utf-8")
+        "".join(f"{sha256(path)}  {path.name}\n" for path in (apk, source, update)), encoding="utf-8")
     (output / "release-notes.md").write_text(
         notes + f"\nSource commit: `{commit}`\n\nCertificate SHA-256: `{RELEASE_CERTIFICATE_SHA256}`\n", encoding="utf-8")
     print(f"Prepared signed APK and source for {tag} at {commit}.")
@@ -157,17 +162,23 @@ def check_uploaded_assets(release, paths):
 
 
 def publish(output):
-    version, code, tag, commit, _ = release_context()
+    version, code, tag, commit, notes = release_context()
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
         raise ValueError("GITHUB_REPOSITORY must select an existing owner/repository.")
     apk = output / f"LessonIsland-{version}.apk"
     source = output / f"LessonIsland-{version}-source.zip"
-    paths = [apk, source, output / "SHA256SUMS.txt"]
+    update = output / "update.json"
+    paths = [apk, source, update, output / "SHA256SUMS.txt"]
     check_apk(apk, version, code, RELEASE_CERTIFICATE_SHA256)
     check_source_archive(source)
-    expected_sums = "".join(f"{sha256(path)}  {path.name}\n" for path in (apk, source))
-    if paths[2].read_text(encoding="utf-8") != expected_sums:
+    repository = os.environ.get("PUBLIC_RELEASE_REPOSITORY") or repo
+    expected_metadata = manifest(apk, version, code, notes, repository,
+                                 read_min_sdk(ROOT / "app/build.gradle"), commit)
+    if json.loads(update.read_text(encoding="utf-8")) != expected_metadata:
+        raise ValueError("update.json does not match the signed APK and release commit.")
+    expected_sums = "".join(f"{sha256(path)}  {path.name}\n" for path in (apk, source, update))
+    if paths[3].read_text(encoding="utf-8") != expected_sums:
         raise ValueError("SHA256SUMS.txt does not match the release files.")
     check_remote_tag(repo, tag, commit)
     release = find_release(repo, tag)

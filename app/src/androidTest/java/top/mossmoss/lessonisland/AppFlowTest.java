@@ -60,6 +60,7 @@ public class AppFlowTest extends InstrumentationTestCase {
     try {
       ui(
           () -> {
+            app.pauseClock();
             app.store.state = new JSONObject(stateBefore);
             app.store.save();
             for (JSONObject c : app.store.courses(false))
@@ -513,8 +514,8 @@ public class AppFlowTest extends InstrumentationTestCase {
     assertEquals("path", app.page);
     assertEquals(-1, app.audio.currentIndex());
     Store reopened = new Store(app);
-    assertEquals(0, reopened.state.getJSONObject("session").getInt("position"));
-    assertEquals(1, reopened.state.getJSONObject("session").getInt("readingIndex"));
+    assertEquals(0, reopened.courseSession("test_flow").getInt("position"));
+    assertEquals(1, reopened.courseSession("test_flow").getInt("readingIndex"));
     ui(() -> app.resumeSession());
     assertEquals(original, app.queue.length());
     assertEquals(1, app.readingIndex);
@@ -583,7 +584,7 @@ public class AppFlowTest extends InstrumentationTestCase {
     }
     assertEquals(baseline + 120, app.store.state.optInt("xp"));
     shot("07-stage-complete");
-    assertFalse(app.store.state.has("session"));
+    assertNull(app.store.courseSession("test_flow"));
     assertEquals(6, new Store(app).progress("test_flow").optInt("completed"));
     ui(() -> app.newSession("test_flow", 0));
     while (app.page.equals("quiz")) answerCorrect();

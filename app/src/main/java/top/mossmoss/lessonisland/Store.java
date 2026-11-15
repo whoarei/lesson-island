@@ -34,7 +34,100 @@ public final class Store {
               .put("history", new JSONArray());
       save();
     }
+    if (StudyTimeLedger.initialize(state, System.currentTimeMillis(), java.time.ZoneId.systemDefault())) save();
     archiveLegacySamples();
+    migrateSessions();
+  }
+
+  private void migrateSessions() throws Exception {
+    boolean changed = false;
+    if (state.optJSONObject("courseSessions") == null) {
+      state.put("courseSessions", new JSONObject());
+      changed = true;
+    }
+    if (state.optJSONObject("reviewSessions") == null) {
+      state.put("reviewSessions", new JSONObject());
+      changed = true;
+    }
+    JSONObject legacy = state.optJSONObject("session");
+    if (legacy != null) {
+      if (legacy.optBoolean("review")) {
+        String key = legacy.optBoolean("reviewOnlyMistakes") ? "mistakes" : "all";
+        if (!state.getJSONObject("reviewSessions").has(key))
+          state.getJSONObject("reviewSessions").put(key, legacy);
+      } else {
+        String id = legacy.optString("course");
+        if (id.matches("[A-Za-z0-9_-]{1,100}")) {
+          if (!state.getJSONObject("courseSessions").has(id))
+            state.getJSONObject("courseSessions").put(id, legacy);
+          state.put("lastLearningCourse", id);
+        }
+      }
+      state.remove("session");
+      changed = true;
+    }
+    if (changed) save();
+  }
+
+  synchronized JSONObject courseSession(String id) throws Exception {
+    return state.getJSONObject("courseSessions").optJSONObject(id);
+  }
+
+  synchronized JSONObject latestCourseSession() throws Exception {
+    JSONObject sessions = state.getJSONObject("courseSessions");
+    JSONObject latest = sessions.optJSONObject(state.optString("lastLearningCourse"));
+    if (isFrontierSession(latest)) return latest;
+    latest = null;
+    long latestTime = Long.MIN_VALUE;
+    for (Iterator<String> keys = sessions.keys(); keys.hasNext(); ) {
+      JSONObject candidate = sessions.optJSONObject(keys.next());
+      if (isFrontierSession(candidate) && candidate.optLong("updatedAt", candidate.optLong("started")) >= latestTime) {
+        latest = candidate;
+        latestTime = candidate.optLong("updatedAt", candidate.optLong("started"));
+      }
+    }
+    return latest;
+  }
+
+  private boolean isFrontierSession(JSONObject session) throws Exception {
+    if (session == null) return false;
+    String id = session.optString("course");
+    int stage = session.optInt("stage", -1);
+    JSONObject progress = state.getJSONObject("progress").optJSONObject(id);
+    int completed = progress == null ? 0 : progress.optInt("completed");
+    if (stage < 0 || stage >= Learning.STAGES.length || stage != completed) return false;
+    try {
+      return course(id).optBoolean("published");
+    } catch (FileNotFoundException e) {
+      return false;
+    }
+  }
+
+  synchronized JSONObject reviewSession(boolean mistakes) throws Exception {
+    return state.getJSONObject("reviewSessions").optJSONObject(mistakes ? "mistakes" : "all");
+  }
+
+  synchronized void saveCourseSession(JSONObject session) throws Exception {
+    String id = safe(session.getString("course"));
+    session.put("updatedAt", System.currentTimeMillis());
+    state.getJSONObject("courseSessions").put(id, session);
+    state.put("lastLearningCourse", id);
+    save();
+  }
+
+  synchronized void saveReviewSession(JSONObject session, boolean mistakes) throws Exception {
+    session.put("reviewOnlyMistakes", mistakes);
+    state.getJSONObject("reviewSessions").put(mistakes ? "mistakes" : "all", session);
+    save();
+  }
+
+  synchronized void removeCourseSession(String id) throws Exception {
+    state.getJSONObject("courseSessions").remove(id);
+    if (id.equals(state.optString("lastLearningCourse"))) state.remove("lastLearningCourse");
+  }
+
+  synchronized void removeReviewSession(boolean mistakes) throws Exception {
+    state.getJSONObject("reviewSessions").remove(mistakes ? "mistakes" : "all");
   }
 
   private void archiveLegacySamples() throws Exception {
@@ -218,6 +311,8 @@ public final class Store {
     JSONObject reviews = state.getJSONObject("reviews");
     for (Iterator<String> keys = reviews.keys(); keys.hasNext(); )
       if (id.equals(reviews.getJSONObject(keys.next()).optString("course"))) return true;
+    JSONObject sessions = state.optJSONObject("courseSessions");
+    if (sessions != null && sessions.optJSONObject(id) != null) return true;
     JSONObject session = state.optJSONObject("session");
     return session != null && id.equals(session.optString("course"));
   }
@@ -565,7 +660,8 @@ public final class Store {
                 .put("seconds", seconds)
                 .put("time", System.currentTimeMillis())
                 .put("xp", fresh ? 20 : 0));
-    state.remove("session");
+    JSONObject pending = courseSession(id);
+    if (pending != null && pending.optInt("stage", -1) == stage) removeCourseSession(id);
     save();
     return fresh;
   }
@@ -723,7 +819,11 @@ public final class Store {
           || p.optInt("correct") < 0
           || p.optInt("attempted") < p.optInt("correct")) throw new Exception("备份中的学习记录无效");
     }
+    StudyTimeLedger.initialize(incoming, System.currentTimeMillis(), java.time.ZoneId.systemDefault());
     incoming.remove("session");
+    incoming.put("courseSessions", new JSONObject());
+    incoming.put("reviewSessions", new JSONObject());
+    incoming.remove("lastLearningCourse");
     for (Map.Entry<String, byte[]> e : files.entrySet())
       if (e.getKey().startsWith("courses/")) {
         JSONObject c = new JSONObject(new String(e.getValue(), StandardCharsets.UTF_8));

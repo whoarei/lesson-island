@@ -10,6 +10,7 @@ import zipfile
 
 import configure_github_signing as setup
 import github_release as release
+from update_metadata import manifest, read_min_sdk, write_manifest
 from ci_check import RELEASE_CERTIFICATE_SHA256, check_certificate
 
 
@@ -114,10 +115,13 @@ class ReleaseTest(unittest.TestCase):
                 apk.write_bytes(b"test apk")
                 source.write_bytes(b"test source")
                 (output / "release-notes.md").write_text("test notes")
+                update = output / "update.json"
+                write_manifest(update, manifest(apk, "1.2.3", 1, "notes", "owner/repo",
+                                                read_min_sdk(release.ROOT / "app/build.gradle"), "commit"))
                 sums = output / "SHA256SUMS.txt"
-                sums.write_text("".join(f"{release.sha256(p)}  {p.name}\n" for p in (apk, source)), encoding="utf-8")
+                sums.write_text("".join(f"{release.sha256(p)}  {p.name}\n" for p in (apk, source, update)), encoding="utf-8")
                 assets = [{"name": p.name, "size": p.stat().st_size,
-                           "digest": "sha256:" + release.sha256(p)} for p in (apk, source, sums)]
+                           "digest": "sha256:" + release.sha256(p)} for p in (apk, source, update, sums)]
                 if corrupt:
                     assets[0]["digest"] = "sha256:" + "0" * 64
                 draft = {"id": 42, "draft": True, "target_commitish": "commit", "assets": assets}
