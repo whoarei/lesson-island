@@ -100,7 +100,6 @@ jobs:
       contents: write
     env:
       CI_VERSION: ${{ needs.checks.outputs.version }}
-      PUBLIC_RELEASE_REPOSITORY: ${{ vars.PUBLIC_RELEASE_REPOSITORY }}
     steps:
       - name: Check out the exact release commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

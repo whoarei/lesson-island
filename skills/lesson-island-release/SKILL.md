@@ -26,7 +26,7 @@ description: "处理课文岛 Lesson Island 的版本发布、发布准备与失
 - **云端发版不要求本机存在 `.local/signing.properties`，其缺失不阻塞默认流程。** 只有本地签名构建、完整本地仪器测试才依赖该文件及原 `E:/Android/libb.keystore`；本地 Debug、测试包和 Release 沿用同一用户证书。
 - 示例素材只能位于 `app/src/androidTest/assets/fixtures`。正式 APK 不得包含示例课文、图片或音频；首次安装从空课程开始。测试允许临时装载示例，结束时恢复原状态。
 - `.local/`、`llm info.txt`、keystore、签名密码和本机配置不进入 Git 或源码包。只分发空白 `signing.properties.example`。
-- Actions 中带 `unsigned` 的 APK 是检查产物，不能作为正式安装包分发或安装。正式交付从对应 GitHub Release 下载：`LessonIsland-x.y.z.apk`、`LessonIsland-x.y.z-source.zip`、`SHA256SUMS.txt`。
+- Actions 中带 `unsigned` 的 APK 是检查产物，不能作为正式安装包分发或安装。正式交付从对应 GitHub Release 下载：`LessonIsland-x.y.z.apk`、`LessonIsland-x.y.z-source.zip`、`update.json`、`SHA256SUMS.txt`。仓库已公开，应用内更新直接读取本仓库 `releases/latest/download/update.json`，无需另建分发仓库或跨仓库 Token。
 
 ## 默认：GitHub Actions 发布
 
@@ -35,14 +35,15 @@ description: "处理课文岛 Lesson Island 的版本发布、发布准备与失
 3. 本地预检可运行 `py -B tools/ci_check.py version` 和 `py -B -m unittest discover -s tools -p 'test_*.py' -v`。云端工作流负责完整构建、JVM 测试、Debug/Release Lint 和仪器测试代码编译；默认流程不以运行本地签名构建为前置条件。根据本次改动执行或复用有效设备回归，范围见后文。
 4. 检查提交范围、私有文件排除和 `git diff --cached --check`，提交发布改动，创建指向该提交的注释标签 `vx.y.z`。按现有分支约定推送发布提交及**仅本次标签**到已核对的远程，可用原子推送。不得强推、移动已有标签或顺带推送其他标签。
 5. 跟进 `.github/workflows/android-ci.yml` 中**该版本标签、该发布提交**对应的运行，不能只看 `main` 上的成功检查。等待 `Build, test and lint` 与 `Sign APK and publish Release` 均成功；不要在推送标签后立即结束任务。
-6. 工作流先构建未签名检查包，再按同次运行的确切产物 ID 下载、验 SHA256、对齐、签名并核验原证书。源码 ZIP 来自同一标签提交。发布脚本先建草稿、上传三个正式文件、核对 GitHub 返回的名称、大小和 SHA256，再发布；沿用脚本，不另行手动构建或上传不同来源的 APK。
-7. 用 `gh release view <标签> --repo whoarei/lesson-island --json isDraft,targetCommitish,assets,url` 确认已发布且目标提交正确，三个正式附件均齐全。下载本次附件到空目录，校验 `SHA256SUMS.txt` 中两项文件，再整理到 `deliverables/`；不要用旧交付文件代替本次下载结果。
+6. 工作流先构建未签名检查包，再按同次运行的确切产物 ID 下载、验 SHA256、对齐、签名并核验原证书。源码 ZIP 来自同一标签提交，`update.json` 按签名 APK 的实际大小、SHA256、版本与最低系统要求生成。发布脚本先建草稿、上传四个正式文件、核对 GitHub 返回的名称、大小和 SHA256，再发布；沿用脚本，不另行手动构建或上传不同来源的 APK。
+7. 用 `gh release view <标签> --repo whoarei/lesson-island --json isDraft,targetCommitish,assets,url` 确认已发布且目标提交正确，四个正式附件均齐全。下载本次附件到空目录，校验 `SHA256SUMS.txt` 中 APK、源码 ZIP、update.json 三项文件，并核对更新索引的版本、APK 地址、大小、SHA256 和源码提交，再整理到 `deliverables/`；不要用旧交付文件代替本次下载结果。
 8. 在对应版本源码下运行 `py -B tools/ci_check.py apk <下载的APK路径> --signed`，核对包名、版本、原证书与正式包不含测试素材；核对源码 ZIP 的提交标识与标签提交一致，且不含私有配置。保留本次日志、设备验证与截图到 `test-results/vx.y.z-*`，最后核对标签、发布提交和工作区状态。
 
 ## 设备验证与真机安装
 
 - 按改动范围验证正式 APK；可在全新专用模拟器检查安装、冷启动、空课程首页、首次家长 PIN 和创建课程入口。安装和 ADB 操作均指定明确设备序列号。自行启动的测试模拟器完成后关闭。
 - 完整本地离线回归使用 `tools/test-android.ps1 -Device <明确设备序列号>`，测试集合以脚本为准，并需要原用户证书的本地签名配置。只有需要验证模型链路时才加 `-LiveApi`，它会消耗用户 API 额度。云端仪器测试编译成功不等于实际运行通过；烟雾测试也不等于完整设备回归。
+- 缺少本地签名配置时，可手动运行 `.github/workflows/android-test-apks.yml`，等待 API 29 与 API 36 的设备回归均完成。工作流在运行器内签名、测试，只上传日志截图；离线用例统一维护于 `tools/android-test-classes.txt`，不得把同类中的真实模型 API 用例混入默认回归。
 - 如用户授权真机安装，完成所需测试后用 `adb -s` 安装并核对启动与安装版本，沿用会话中的已有授权。不在真机执行会装载测试课程的仪器测试。签名冲突不自动卸载应用，先保护数据；手机拒绝安装时请用户处理设备端提示后重试。
 
 ## 失败与恢复

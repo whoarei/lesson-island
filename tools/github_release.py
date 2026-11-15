@@ -97,7 +97,7 @@ def prepare(unsigned_apk, output):
     subprocess.run(["git", "archive", "--format=zip", f"--output={source.resolve()}", commit], cwd=ROOT, check=True)
     check_source_archive(source)
     update = output / "update.json"
-    repository = os.environ.get("PUBLIC_RELEASE_REPOSITORY") or os.environ.get("GITHUB_REPOSITORY", "")
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
     write_manifest(update, manifest(apk, version, code, notes, repository,
                                     read_min_sdk(ROOT / "app/build.gradle"), commit))
     (output / "SHA256SUMS.txt").write_text(
@@ -172,8 +172,7 @@ def publish(output):
     paths = [apk, source, update, output / "SHA256SUMS.txt"]
     check_apk(apk, version, code, RELEASE_CERTIFICATE_SHA256)
     check_source_archive(source)
-    repository = os.environ.get("PUBLIC_RELEASE_REPOSITORY") or repo
-    expected_metadata = manifest(apk, version, code, notes, repository,
+    expected_metadata = manifest(apk, version, code, notes, repo,
                                  read_min_sdk(ROOT / "app/build.gradle"), commit)
     if json.loads(update.read_text(encoding="utf-8")) != expected_metadata:
         raise ValueError("update.json does not match the signed APK and release commit.")
