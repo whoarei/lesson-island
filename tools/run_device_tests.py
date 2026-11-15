@@ -26,7 +26,7 @@ def selectors(path=SELECTORS):
             continue
         if not re.fullmatch(r"top\.mossmoss\.lessonisland\.[A-Za-z][A-Za-z0-9_]*(?:#test[A-Za-z0-9_]+)?", value):
             raise ValueError("Invalid Android test selector: " + value)
-        if value == PACKAGE + ".AppFlowTest" or value.endswith("#testZLiveImageToPublishedCourse"):
+        if value == PACKAGE + ".AppFlowTest" or "#testZLive" in value:
             raise ValueError("The offline regression set must not include live-model API tests.")
         if value in result:
             raise ValueError("Duplicate Android test selector: " + value)

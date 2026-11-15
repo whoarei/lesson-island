@@ -52,10 +52,11 @@ class DeviceRunnerTest(unittest.TestCase):
         self.assertEqual(sum(".AppFlowTest#" in name for name in selected), 19)
         self.assertEqual(len(selected), 23)
         self.assertNotIn("top.mossmoss.lessonisland.AppFlowTest", selected)
-        self.assertFalse(any("LiveImage" in name for name in selected))
+        self.assertFalse(any("testZLive" in name for name in selected))
         path = self.base / "cases.txt"
         for text in ("", "top.mossmoss.lessonisland.AppFlowTest\n",
                      "top.mossmoss.lessonisland.AppFlowTest#testZLiveImageToPublishedCourse\n",
+                     "top.mossmoss.lessonisland.AppFlowTest#testZLiveSpeechPreviewAndItemRegeneration\n",
                      "another.package.Tests\n", selected[0] + "\n" + selected[0] + "\n"):
             with self.subTest(text=text):
                 path.write_text(text, encoding="utf-8")

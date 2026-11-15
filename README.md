@@ -8,11 +8,9 @@ Android 单机英语课文学习软件。原生 Java UI，无账号、无自建�
 
 ## 开始使用
 
-当前版本为 0.2.0，包含海岛主题界面、课程草稿与版本管理、语音设置及录音编辑功能。
+当前版本为 0.3.0，新增实际前台学习计时、独立的课文与复习断点、已完成关卡自由重练，以及家长模式中的应用更新。
 
-下述独立计时、练习断点隔离和应用内更新属于准备中的 0.3.0，尚未包含在 0.2.0 安装包中。
-
-从 [GitHub Release v0.2.0](https://github.com/whoarei/lesson-island/releases/tag/v0.2.0) 下载 `LessonIsland-0.2.0.apk`，本机交付副本为 `deliverables/LessonIsland-0.2.0.apk`。仓库已公开，下载无需 GitHub 账号。正式版首次启动没有课程，首页会显示「家长创建课程」。工程中的四组图片与生成素材只供调试测试，放在 Android 测试包中，不随正式应用安装。
+从 [GitHub Release v0.3.0](https://github.com/whoarei/lesson-island/releases/tag/v0.3.0) 下载 `LessonIsland-0.3.0.apk`，本机交付副本为 `deliverables/LessonIsland-0.3.0.apk`。仓库已公开，下载无需 GitHub 账号。正式版首次启动没有课程，首页会显示「家长创建课程」。工程中的四组图片与生成素材只供调试测试，放在 Android 测试包中，不随正式应用安装。
 
 1. 点击首页「家长创建课程」，或右上角「家长入口」。首次进入时设置并确认自己的 4 位家长 PIN，随后即可进入制课页面。
 2. 家长设置 → 直接填写 API 地址、模型名称和密钥，保存设置。可用“测试模型连接”和“测试语音并试听”分别验证文本模型和语音服务。
@@ -99,7 +97,7 @@ keyPassword=
 
 构建脚本执行调试构建、单元测试、Lint 和正式签名构建，并更新交付 APK。**本地 Debug、Android 测试包与 Release 均使用上述 keystore；配置缺失时会明确报错，不会生成或改用其他证书。** `.local` 已加入忽略规则，不包含在源码交付包中。请自行保管原 keystore 和密码，后续覆盖安装升级必须沿用相同证书。
 
-0.2.0 继续使用原 `E:/Android/libb.keystore` 对应证书签名，GitHub Actions 从仓库 Secrets 中读取同一份签名材料。证书 SHA-256：`28c461e4f2f8612f9d7717d727e772177474798fd7c48b03ca3ffbca8c81bf0a`。可以覆盖安装同一证书的 0.1.0 / 0.1.1 / 0.1.2，保留用户数据。原开发证书与 `libb.keystore` 不同，已有安装不能直接跨证书覆盖；请先备份学习数据，或使用干净的测试模拟器。
+0.3.0 继续使用原 `E:/Android/libb.keystore` 对应证书签名，GitHub Actions 从仓库 Secrets 中读取同一份签名材料。证书 SHA-256：`28c461e4f2f8612f9d7717d727e772177474798fd7c48b03ca3ffbca8c81bf0a`。可以覆盖安装同一证书的 0.1.x / 0.2.0，保留用户数据。原开发证书与 `libb.keystore` 不同，已有安装不能直接跨证书覆盖；请先备份学习数据，或使用干净的测试模拟器。
 
 0.1.0 的签名与真机安装证据保存在 `test-results/libb-*`；后续版本的构建、回归与真机记录按版本号保存在 `test-results/vx.y.z-*`。
 
