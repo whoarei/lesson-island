@@ -1,5 +1,8 @@
 plugins { id 'com.android.application' }
 
+// CI checks compile without access to the user's signing key. Local builds stay signed.
+def ciUnsigned = providers.gradleProperty('ciUnsigned').getOrElse('false') == 'true'
+
 android {
     namespace 'top.mossmoss.lessonisland'
     compileSdk 36
@@ -13,7 +16,7 @@ android {
     }
     def localSigning = rootProject.file('.local/signing.properties')
     def signingValues = new Properties()
-    if (localSigning.exists()) {
+    if (!ciUnsigned && localSigning.exists()) {
         localSigning.withReader('UTF-8') { signingValues.load(it) }
     }
     def userKeystore = rootProject.file(signingValues.getProperty('storeFile', 'E:/Android/libb.keystore').trim())
@@ -31,14 +34,14 @@ android {
         }
     }
     buildTypes {
-        debug { signingConfig signingConfigs.localUser }
+        debug { signingConfig ciUnsigned ? null : signingConfigs.localUser }
         release {
             minifyEnabled false
-            signingConfig signingConfigs.localUser
+            signingConfig ciUnsigned ? null : signingConfigs.localUser
         }
     }
     tasks.configureEach { task ->
-        if (task.name in ['validateSigningDebug', 'validateSigningRelease']) {
+        if (!ciUnsigned && task.name in ['validateSigningDebug', 'validateSigningRelease']) {
             task.doFirst {
                 if (!localSigning.isFile()) {
                     throw new GradleException('Create .local/signing.properties from signing.properties.example and fill your keystore credentials.')

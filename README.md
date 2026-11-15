@@ -97,6 +97,27 @@ keyPassword=
 .\tools\build.ps1 -DebugOnly
 ```
 
+## GitHub CI
+
+[Android CI](https://github.com/whoarei/lesson-island/actions/workflows/android-ci.yml) 在推送 `main`、提交面向 `main` 的 PR、推送 `v*` 标签时运行，也可以在 Actions 页面点击 **Run workflow** 手动运行。
+
+- 使用单个 Ubuntu 24.04 任务、JDK 17 和 Gradle 缓存；同一分支或 PR 的新任务取消旧任务，单次最长 20 分钟。
+- 校验 `versionName` 为 `x.y.z`、`versionCode` 为有效正整数；标签任务额外要求标签等于 `v<versionName>`，且 `CHANGELOG.md` 有该版本的带日期发布记录。
+- 构建 Debug、Release，执行 JVM 单元测试、两种构建的 Lint，并编译 Android 仪器测试代码。不会启动模拟器、连接真机或调用模型 API；设备回归仍按下节执行。
+- 核对 Release APK 的包名与版本，拒绝混入 `assets/courses`、`assets/audio` 或 `assets/fixtures` 中的测试素材。
+- Actions 产物保留 7 天：`LessonIsland-版本-unsigned-运行编号` 包含未签名 APK 与 `SHA256SUMS.txt`；`android-reports-运行编号` 包含测试与 Lint 报告，检查失败时也尽量保留报告。
+
+CI 显式传入 `-PciUnsigned=true`，不读取用户签名配置，也不需要设置 GitHub Secrets。**云端 APK 未签名，仅供构建与内容检查，不能直接安装或作为正式安装包分发。** 本地普通构建仍要求原用户证书；正式发布继续使用上面的发布技能与 `tools/build.ps1`，CI 不修改版本、不创建标签或 GitHub Release。
+
+本地复现 CI 检查（使用本机 Android SDK、JDK 与 Python 3）：
+
+```powershell
+py -B tools/ci_check.py version
+py -B -m unittest discover -s tools -p 'test_ci_check.py' -v
+.\gradlew.bat --no-daemon --console=plain -PciUnsigned=true :app:assembleDebug :app:assembleRelease :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:compileDebugAndroidTestJavaWithJavac
+py -B tools/ci_check.py apk app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
 ## 测试
 
 请使用专用测试模拟器；脚本会安装测试应用。测试构建与正式版使用同一份本地签名配置，不应在有重要学习记录的设备上执行安装测试。首次从原开发证书切换到用户 keystore 时，应先备份数据或使用干净的测试模拟器。
