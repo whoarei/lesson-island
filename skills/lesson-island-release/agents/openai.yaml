@@ -1,4 +1,4 @@
 interface:
   display_name: "课文岛版本发布"
-  short_description: "确认 x.y.z 版本号，构建签名安装包、验证并发布课文岛版本。"
-  default_prompt: "使用 $lesson-island-release 发布课文岛；未提供 x.y.z 版本号时先向我确认。"
+  short_description: "确认 x.y.z，推送标签，由 GitHub Actions 签名并发布课文岛。"
+  default_prompt: "使用 $lesson-island-release 发布课文岛：先确认本次 x.y.z，再推送版本标签，由 GitHub Actions 签名发布并核验下载产物。"
