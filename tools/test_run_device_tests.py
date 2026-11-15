@@ -34,7 +34,7 @@ class DeviceRunnerTest(unittest.TestCase):
             screenshot.write_bytes(b"test image bytes")
             result = "1 file pulled\n"
         else:
-            result = "Starting: Intent\n"
+            result = "Starting: Intent\nStatus: ok\n"
         log.write_text(result, encoding="utf-8")
         return 0, result
 
@@ -121,6 +121,19 @@ class DeviceRunnerTest(unittest.TestCase):
         self.assertTrue((self.output / "verification.txt").is_file())
         self.assertTrue((self.output / "instrumentation.txt").is_file())
         self.assertFalse(list(self.output.rglob("*.apk")))
+
+    def test_incomplete_activity_launch_prevents_instrumentation(self):
+        def incomplete_launch(command, log, timeout):
+            if "start" in command:
+                self.commands.append(command)
+                log.write_text("Starting: Intent\nStatus: timeout\n")
+                return 0, log.read_text()
+            return self.fake_command(command, log, timeout)
+
+        self.assertEqual(self.invoke(incomplete_launch), 1)
+        self.assertFalse(any("instrument" in command for command in self.commands))
+        self.assertFalse(self.report()["testsPassed"])
+        self.assertIn("Cannot launch", self.report()["message"])
 
     def test_missing_screenshots_are_distinguished_from_complete_qa(self):
         def fail_pull(command, log, timeout):

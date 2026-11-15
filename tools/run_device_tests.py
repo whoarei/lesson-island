@@ -123,12 +123,13 @@ def run(serial, apks, output):
             code, result = device("install", "-r", apks / name, log=log)
             if code or not re.search(r"^Success\s*$", result, re.MULTILINE):
                 raise ValueError("APK installation failed. See " + log + ".")
-        code, _ = device("shell", "am", "start", "-n", PACKAGE + "/.MainActivity", log="launch.txt")
-        if code:
+        code, launch = device("shell", "am", "start", "-W", "-n", PACKAGE + "/.MainActivity",
+                              log="launch.txt", timeout=60)
+        if code or not re.search(r"^\s*Status:\s*ok\s*$", launch, re.MULTILINE):
             raise ValueError("Cannot launch the test application. See launch.txt.")
         report["stage"] = "instrumentation"
         print("Running offline Android regression tests...", flush=True)
-        code, result = device("shell", "am", "instrument", "-w", "-e", "class", ",".join(selected),
+        code, result = device("shell", "am", "instrument", "-w", "-r", "-e", "class", ",".join(selected),
                               PACKAGE + ".test/android.test.InstrumentationTestRunner",
                               log="instrumentation.txt", timeout=900)
         failure = None
