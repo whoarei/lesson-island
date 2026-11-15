@@ -12,6 +12,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 PACKAGE = "top.mossmoss.lessonisland"
+# Public fingerprint of the existing libb.keystore release certificate.
+RELEASE_CERTIFICATE_SHA256 = "28c461e4f2f8612f9d7717d727e772177474798fd7c48b03ca3ffbca8c81bf0a"
 
 
 def read_version(build_text):
@@ -41,17 +43,36 @@ def check_assets(names):
         raise ValueError("Test content found in the application APK: " + ", ".join(unexpected[:5]))
 
 
-def check_apk(apk, version, code):
+def build_tools():
     sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
     if not sdk:
         raise ValueError("Set ANDROID_HOME to the Android SDK directory.")
-    aapt = Path(sdk) / "build-tools" / "35.0.0" / ("aapt.exe" if os.name == "nt" else "aapt")
+    return Path(sdk) / "build-tools" / "35.0.0"
+
+
+def apksigner(*args, **kwargs):
+    return subprocess.check_output(
+        ["java", "-jar", str(build_tools() / "lib/apksigner.jar"), *map(str, args)],
+        encoding="utf-8", **kwargs)
+
+
+def check_certificate(output, expected):
+    fingerprints = re.findall(r"^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-fA-F]+)$",
+                              output, re.MULTILINE)
+    if [value.lower() for value in fingerprints] != [expected.lower()]:
+        raise ValueError("APK must have exactly one signer matching the existing release certificate.")
+
+
+def check_apk(apk, version, code, certificate=None):
+    aapt = build_tools() / ("aapt.exe" if os.name == "nt" else "aapt")
     badging = subprocess.check_output([str(aapt), "dump", "badging", str(apk)], encoding="utf-8")
     package = re.search(r"^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging)
     if not package or package.groups() != (PACKAGE, str(code), version):
         raise ValueError("APK package/version does not match app/build.gradle.")
     with zipfile.ZipFile(apk) as archive:
         check_assets(archive.namelist())
+    if certificate:
+        check_certificate(apksigner("verify", "--print-certs", apk), certificate)
     print(f"APK verified: {PACKAGE}, version {version} ({code}), no bundled test content.")
 
 
@@ -59,11 +80,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("version")
-    subparsers.add_parser("apk").add_argument("path", type=Path)
+    apk_parser = subparsers.add_parser("apk")
+    apk_parser.add_argument("path", type=Path)
+    apk_parser.add_argument("--signed", action="store_true", help="Require the existing release certificate.")
     args = parser.parse_args()
     version, code = read_version((ROOT / "app/build.gradle").read_text(encoding="utf-8"))
     if args.command == "apk":
-        check_apk(args.path, version, code)
+        check_apk(args.path, version, code, RELEASE_CERTIFICATE_SHA256 if args.signed else None)
         return
     if os.environ.get("GITHUB_REF_TYPE") == "tag":
         check_tag(version, os.environ["GITHUB_REF_NAME"],

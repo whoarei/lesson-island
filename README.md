@@ -101,22 +101,57 @@ keyPassword=
 
 [Android CI](https://github.com/whoarei/lesson-island/actions/workflows/android-ci.yml) 在推送 `main`、提交面向 `main` 的 PR、推送 `v*` 标签时运行，也可以在 Actions 页面点击 **Run workflow** 手动运行。
 
-- 使用单个 Ubuntu 24.04 任务、JDK 17 和 Gradle 缓存；同一分支或 PR 的新任务取消旧任务，单次最长 20 分钟。
+- 检查使用单个 Ubuntu 24.04 任务、JDK 17 和 Gradle 缓存，最长 20 分钟；同一分支或 PR 的新任务取消旧任务，标签任务按顺序运行。
 - 校验 `versionName` 为 `x.y.z`、`versionCode` 为有效正整数；标签任务额外要求标签等于 `v<versionName>`，且 `CHANGELOG.md` 有该版本的带日期发布记录。
 - 构建 Debug、Release，执行 JVM 单元测试、两种构建的 Lint，并编译 Android 仪器测试代码。不会启动模拟器、连接真机或调用模型 API；设备回归仍按下节执行。
 - 核对 Release APK 的包名与版本，拒绝混入 `assets/courses`、`assets/audio` 或 `assets/fixtures` 中的测试素材。
-- Actions 产物保留 7 天：`LessonIsland-版本-unsigned-运行编号` 包含未签名 APK 与 `SHA256SUMS.txt`；`android-reports-运行编号` 包含测试与 Lint 报告，检查失败时也尽量保留报告。
+- Actions 产物保留 7 天：`LessonIsland-版本-unsigned-运行编号-尝试编号` 包含未签名 APK 与 `SHA256SUMS.txt`；`android-reports-运行编号-尝试编号` 包含测试与 Lint 报告，检查失败时也尽量保留报告。
 
-CI 显式传入 `-PciUnsigned=true`，不读取用户签名配置，也不需要设置 GitHub Secrets。**云端 APK 未签名，仅供构建与内容检查，不能直接安装或作为正式安装包分发。** 本地普通构建仍要求原用户证书；正式发布继续使用上面的发布技能与 `tools/build.ps1`，CI 不修改版本、不创建标签或 GitHub Release。
+检查任务显式传入 `-PciUnsigned=true`，不读取用户签名配置，也不需要 GitHub Secrets。**检查产物中的 APK 未签名，仅供构建与内容检查，不能直接安装或作为正式安装包分发。** 版本标签通过检查后，单独的发布任务会使用下述 Secrets 签名并自动发布 GitHub Release。本地普通构建仍要求原用户证书。
 
 本地复现 CI 检查（使用本机 Android SDK、JDK 与 Python 3）：
 
 ```powershell
 py -B tools/ci_check.py version
-py -B -m unittest discover -s tools -p 'test_ci_check.py' -v
+py -B -m unittest discover -s tools -p 'test_*.py' -v
 .\gradlew.bat --no-daemon --console=plain -PciUnsigned=true :app:assembleDebug :app:assembleRelease :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:compileDebugAndroidTestJavaWithJavac
 py -B tools/ci_check.py apk app/build/outputs/apk/release/app-release-unsigned.apk
 ```
+
+### GitHub 自动签名发布
+
+一次性配置需要本机安装 Python 3.11+、JDK（含 `keytool`）与已登录的 GitHub CLI。运行：
+
+```powershell
+py -B tools/configure_github_signing.py
+```
+
+脚本会提示输入现有密钥别名、keystore 密码与密钥密码（后两项隐藏输入，密钥密码留空沿用 keystore 密码），先核对证书与上面记录的发布证书一致，再将签名材料通过标准输入写入 `whoarei/lesson-island` 的 Actions Secrets。密码只在本机输入，不要发到聊天或填进示例文件。可通过 `--keystore`、`--alias` 和 `--repo` 指定其他路径、同一证书的别名或目标仓库。
+
+也可在 [仓库 Actions Secrets](https://github.com/whoarei/lesson-island/settings/secrets/actions) 手动配置：
+
+| Secret | 内容 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | 原 `libb.keystore` 文件的单行 Base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | 原 keystore 密码 |
+| `ANDROID_KEY_ALIAS` | 原私钥别名 |
+| `ANDROID_KEY_PASSWORD` | 私钥密码；可省略或留空以沿用 keystore 密码 |
+
+本机默认 keystore 路径仍为 `E:/Android/libb.keystore`。配置工具只上传现有密钥，不生成替代证书、不创建标签或 Release。可用 `gh secret list --repo whoarei/lesson-island` 核对名称，列表不会显示值。Secrets 仅在版本标签的签名步骤中使用，临时 keystore 在步骤结束或失败时清理。
+
+每次发布仍先由用户明确选择 `x.y.z` 版本，更新 `app/build.gradle` 的 `versionName`、递增 `versionCode`，并在 `CHANGELOG.md` 添加 `## x.y.z — YYYY-MM-DD` 发布说明。提交这些修改，创建指向该提交的注释标签 `vx.y.z`，再明确推送这个标签。CI 不自动选择版本、不创建或移动标签。
+
+推送标签后，`Sign APK and publish Release` 自动等待检查任务通过，再下载**同一次运行的确切产物 ID**、校验 SHA256、对 APK 执行对齐与签名。它会再次检查包名、版本、测试素材，以及证书 SHA-256 是否与现有正式版一致。源码 ZIP 来自同一标签提交，并检查其中不含私有配置。GitHub Release 使用当前仓库自带的 `GITHUB_TOKEN`，无需另外配置 PAT；只有发布任务申请 `contents: write`。
+
+Release 最终包含：
+
+- `LessonIsland-x.y.z.apk`：可安装的正式签名 APK。
+- `LessonIsland-x.y.z-source.zip`：对应提交的源码包。
+- `SHA256SUMS.txt`：上述两个文件的 SHA256。
+
+发布说明取自该版本的更新记录，并记录源码提交和证书指纹。流程先创建草稿、上传文件、核对 GitHub 返回的文件名、大小和 SHA256，再自动发布。仓库为私有时，Release 仍保持私有。
+
+失败后可在 Actions 重跑失败任务；草稿只允许同一提交继续上传，已发布 Release 不会覆盖。也可在标签对应的 Actions 页面运行工作流。仪器测试编译不等于设备回归，正式发布前仍按下面的流程按需验证模拟器或真机。
 
 ## 测试
 
