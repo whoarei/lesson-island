@@ -68,6 +68,20 @@ class ReleaseTest(unittest.TestCase):
             self.assertEqual(release.find_release("owner/repo", "v1.2.3"), draft)
             self.assertIn("page=2", api.call_args.args[0])
 
+    def test_new_draft_lookup_retries_only_until_visible(self):
+        draft = {"draft": True, "tag_name": "v1.2.3"}
+        with patch.object(release, "find_release", side_effect=[None, None, draft]) as find, \
+                patch.object(release.time, "sleep") as sleep:
+            self.assertEqual(release.wait_for_release("owner/repo", "v1.2.3"), draft)
+            self.assertEqual(find.call_count, 3)
+            self.assertEqual(sleep.call_count, 2)
+        with patch.object(release, "find_release", return_value=None) as find, \
+                patch.object(release.time, "sleep") as sleep:
+            with self.assertRaises(ValueError):
+                release.wait_for_release("owner/repo", "v1.2.3")
+            self.assertEqual(find.call_count, 6)
+            self.assertEqual(sleep.call_count, 5)
+
     def test_signing_failure_removes_temporary_key(self):
         env = {"ANDROID_KEYSTORE_BASE64": base64.b64encode(b"not a real key").decode(),
                "ANDROID_KEYSTORE_PASSWORD": "test password", "ANDROID_KEY_ALIAS": "test alias"}

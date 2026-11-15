@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 
 from ci_check import (ROOT, RELEASE_CERTIFICATE_SHA256, apksigner, build_tools,
@@ -132,6 +133,17 @@ def check_remote_tag(repo, tag, commit):
         raise ValueError("The remote release tag no longer matches the checked commit.")
 
 
+def wait_for_release(repo, tag):
+    # Newly created drafts can take a few seconds to appear in the REST listing.
+    for attempt in range(6):
+        release = find_release(repo, tag)
+        if release is not None:
+            return release
+        if attempt < 5:
+            time.sleep(5)
+    raise ValueError("Cannot find the newly created release draft after retrying.")
+
+
 def check_draft(release, commit):
     if release and (not release["draft"] or release["target_commitish"] != commit):
         raise ValueError("Refusing to overwrite a published Release or a draft for another commit.")
@@ -165,9 +177,7 @@ def publish(output):
         subprocess.run(["gh", "release", "create", *common, "--verify-tag", "--target", commit,
                         "--title", f"Lesson Island {version}", "--notes-file", str(output / "release-notes.md"),
                         "--draft"], check=True)
-        release = find_release(repo, tag)
-        if release is None:
-            raise ValueError("Cannot find the newly created release draft.")
+        release = wait_for_release(repo, tag)
         check_draft(release, commit)
     else:
         subprocess.run(["gh", "release", "edit", *common, "--notes-file", str(output / "release-notes.md")], check=True)
