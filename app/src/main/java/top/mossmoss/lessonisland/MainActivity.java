@@ -16,13 +16,13 @@ import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.regex.*;
 import org.json.*;
 
 public final class MainActivity extends Activity {
   static final int INK = AdventureArt.INK,
       MUTED = Color.rgb(94, 115, 131),
       GREEN = AdventureArt.TEAL,
+      RED = Color.rgb(181, 48, 48),
       BG = Color.rgb(247, 252, 255),
       LINE = AdventureArt.LINE,
       LIME = Color.rgb(235, 249, 215);
@@ -37,8 +37,15 @@ public final class MainActivity extends Activity {
   String page = "home", selectedId = "", status = "";
   int materialTab = 0;
   TextView statusView;
+  Runnable materialControlsChanged;
+  Runnable serviceControlsChanged;
+  ItemAudioEditor itemAudioEditor;
+  File voicePreview;
   final List<LinearLayout> materialCards = new ArrayList<>();
   final List<TextView> materialStates = new ArrayList<>();
+  final List<String> materialItems = new ArrayList<>();
+  final List<String> materialAudioFiles = new ArrayList<>();
+  PassageView passage;
   LinearLayout materialPlaybackBar;
   TextView materialPlaybackStatus;
   int materialPlaying = -1;
@@ -54,6 +61,9 @@ public final class MainActivity extends Activity {
   long started;
   long activeMillis, activeTick;
   boolean reviewing = false, answered = false;
+  int readingIndex;
+  float readingSpeed = 1f;
+  Runnable readingControlsChanged;
   String selectedAnswer = "";
   EditText answerInput;
   List<Integer> ordered = new ArrayList<>();
@@ -256,9 +266,13 @@ public final class MainActivity extends Activity {
   }
 
   void screen(String name, String title, boolean nav) {
-    if (page.equals("materials") && audio != null) audio.stop();
+    if ((page.equals("materials") || readingControlsChanged != null) && audio != null) audio.stop();
+    readingControlsChanged = null;
     materialCards.clear();
     materialStates.clear();
+    materialItems.clear();
+    materialAudioFiles.clear();
+    passage = null;
     materialPlaying = -1;
     materialPlaybackBar = null;
     materialPlaybackStatus = null;
@@ -272,6 +286,8 @@ public final class MainActivity extends Activity {
     page = name;
     if (name.equals("quiz") && activeTick == 0) activeTick = SystemClock.elapsedRealtime();
     statusView = null;
+    materialControlsChanged = null;
+    serviceControlsChanged = null;
     actionFooter = null;
     answered = false;
     shell = col();
@@ -622,8 +638,7 @@ public final class MainActivity extends Activity {
       add(box, hint);
       if (locked) {
         box.setContentDescription("第 " + (i + 1) + " 关，" + Learning.STAGES[i] + "，尚未解锁");
-      } else
-        action(box, i < done ? "再练一次" : "开始第 " + (i + 1) + " 关", i == done, () -> begin(id, stage));
+      }
       trail.addView(box);
     }
     add(body, trail);
@@ -654,6 +669,8 @@ public final class MainActivity extends Activity {
     queue = new JSONArray();
     for (int i = 0; i < activeQuestions.size(); i++) queue.put(i);
     position = 0;
+    readingIndex = 0;
+    readingSpeed = 1f;
     sessionAttempts = 0;
     sessionCorrect = 0;
     started = System.currentTimeMillis();
@@ -671,6 +688,8 @@ public final class MainActivity extends Activity {
             .put("stage", sessionStage)
             .put("queue", queue)
             .put("position", position)
+            .put("readingIndex", readingIndex)
+            .put("readingSpeed", readingSpeed)
             .put("attempts", sessionAttempts)
             .put("correct", sessionCorrect)
             .put("started", started)
@@ -693,6 +712,7 @@ public final class MainActivity extends Activity {
         .put("answer", q.answer)
         .put("explanation", q.explanation)
         .put("audio", q.audio)
+        .put("audioFile", q.audioFile)
         .put("options", new JSONArray(q.options));
   }
 
@@ -707,6 +727,7 @@ public final class MainActivity extends Activity {
             j.optString("audio"));
     JSONArray a = j.optJSONArray("options");
     if (a != null) for (int i = 0; i < a.length(); i++) q.options.add(a.getString(i));
+    q.audioFile = j.optString("audioFile");
     return q;
   }
 
@@ -717,6 +738,8 @@ public final class MainActivity extends Activity {
     sessionStage = s.getInt("stage");
     queue = s.getJSONArray("queue");
     position = s.getInt("position");
+    readingIndex = s.optInt("readingIndex", position);
+    readingSpeed = (float) Math.max(.5, Math.min(2, s.optDouble("readingSpeed", 1)));
     sessionAttempts = s.getInt("attempts");
     sessionCorrect = s.getInt("correct");
     started = s.getLong("started");
@@ -749,6 +772,10 @@ public final class MainActivity extends Activity {
   void showQuestion() throws Exception {
     audio.stop();
     Learning.Question q = current();
+    if (!reviewing && sessionStage == 0) {
+      showReadingLesson();
+      return;
+    }
     screen("quiz", "保存并退出", false);
     selectedAnswer = "";
     ordered.clear();
@@ -812,7 +839,7 @@ public final class MainActivity extends Activity {
               false,
               () -> {
                 audio.setSpeed(1f);
-                audio.play(q.audio, this::toast);
+                audio.play(q.audio, q.audioFile, this::toast);
               }));
       View gap = new View(this);
       controls.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
@@ -823,7 +850,7 @@ public final class MainActivity extends Activity {
               false,
               () -> {
                 audio.setSpeed(.78f);
-                audio.play(q.audio, this::toast);
+                audio.play(q.audio, q.audioFile, this::toast);
               }));
       add(body, controls);
       space(body, 20);
@@ -906,43 +933,105 @@ public final class MainActivity extends Activity {
       action(body, "检查拼写", true, () -> submit(answerInput.getText().toString()));
     } else {
       for (String option : q.options) {
-        Button b = button(option, false, () -> {});
+        Button b = button(option, false, () -> submit(option));
+        b.setTextColor(INK);
         b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         b.setPadding(dp(18), dp(14), dp(18), dp(14));
-        b.setOnClickListener(
-            v ->
-                safe(
-                    () -> {
-                      if (answered) return;
-                      selectedAnswer = option;
-                      for (int i = 0; i < body.getChildCount(); i++) {
-                        View child = body.getChildAt(i);
-                        if (child instanceof Button && "option".equals(child.getTag()))
-                          child.setBackground(
-                              new AdventureArt.Face(this, Color.WHITE, LINE, 18, 4));
-                      }
-                      b.setBackground(
-                          new AdventureArt.Face(
-                              this, AdventureArt.SKY, Color.rgb(100, 178, 212), 18, 4));
-                    }));
         b.setTag("option");
         space(body, 10);
         add(body, b);
       }
-      action(
-          body,
-          "检查答案",
-          true,
-          () -> {
-            if (selectedAnswer.isEmpty()) {
-              toast("先选一个答案吧");
-              return;
-            }
-            submit(selectedAnswer);
-          });
     }
     space(body, 16);
     add(body, text("每一次练习，都在让记忆更牢固。", 12, MUTED, false));
+  }
+
+  boolean isReadingLesson() {
+    return page.equals("quiz") && !reviewing && sessionStage == 0;
+  }
+
+  void showReadingLesson() throws Exception {
+    screen("quiz", "保存并退出", false);
+    add(body, label("LEVEL 01  /  初识课文"));
+    space(body, 10);
+    add(body, text(store.course(sessionCourse).getString("title"), 25, INK, true));
+    space(body, 10);
+    materialHint(false);
+    JSONArray sentences = new JSONArray();
+    for (Learning.Question q : activeQuestions) {
+      sentences.put(new JSONObject().put("en", q.prompt).put("zh", q.answer));
+      materialItems.add(q.audio);
+      materialAudioFiles.add(q.audioFile);
+    }
+    passage = new PassageView(this, sentences, this::tapMaterial, null);
+    passage.setTag("passage:bilingual");
+    add(body, passage);
+    pinAction("完成本关  →", this::finishReadingLesson);
+    LinearLayout controls = row();
+    Button slower = button("减速", false, () -> changeReadingSpeed(-.25f));
+    Button faster = button("加速", false, () -> changeReadingSpeed(.25f));
+    for (Button control : new Button[] {slower, faster}) {
+      control.setMinHeight(dp(48));
+      control.setMinimumHeight(dp(48));
+      control.setPadding(dp(12), dp(6), dp(12), dp(9));
+    }
+    weight(controls, slower);
+    TextView rate = text("", 12, GREEN, true);
+    rate.setGravity(Gravity.CENTER);
+    rate.setMinHeight(dp(48));
+    rate.setOnClickListener(v -> audio.stop());
+    controls.addView(rate, new LinearLayout.LayoutParams(dp(82), -2));
+    weight(controls, faster);
+    LinearLayout.LayoutParams controlsLayout = new LinearLayout.LayoutParams(-1, -2);
+    controlsLayout.bottomMargin = dp(8);
+    actionFooter.addView(controls, 0, controlsLayout);
+    readingControlsChanged =
+        () -> {
+          String speed = getString(R.string.reading_speed, readingSpeed);
+          rate.setText(
+              getString(
+                  materialPlaying >= 0 ? R.string.reading_speed_stop : R.string.reading_speed,
+                  readingSpeed));
+          rate.setContentDescription("播放速度 " + speed + (materialPlaying >= 0 ? "，点击停止朗读" : ""));
+          rate.setClickable(materialPlaying >= 0);
+          rate.setFocusable(materialPlaying >= 0);
+          slower.setEnabled(readingSpeed > .5f);
+          faster.setEnabled(readingSpeed < 2f);
+        };
+    audio.setSpeed(readingSpeed);
+    readingControlsChanged.run();
+    readingIndex = Math.max(0, Math.min(readingIndex, activeQuestions.size() - 1));
+    if (readingIndex > 0) {
+      int resumeAt = readingIndex;
+      scroll.post(
+          () -> {
+            if (!isReadingLesson() || passage == null) return;
+            Rect rect = new Rect();
+            if (!passage.sentenceBounds(resumeAt, rect)) return;
+            scroll.offsetDescendantRectToMyCoords(passage, rect);
+            scroll.scrollTo(0, Math.max(0, rect.top - dp(12)));
+          });
+    }
+  }
+
+  void changeReadingSpeed(float change) throws Exception {
+    readingSpeed = Math.max(.5f, Math.min(2f, readingSpeed + change));
+    audio.setSpeed(readingSpeed);
+    readingControlsChanged.run();
+    saveSession();
+  }
+
+  void finishReadingLesson() throws Exception {
+    if (!isReadingLesson() || answered) return;
+    answered = true;
+    audio.stop();
+    int remaining = queue.length() - position;
+    store.recordReading(sessionCourse, remaining);
+    sessionAttempts += remaining;
+    sessionCorrect += remaining;
+    position = queue.length();
+    saveSession();
+    finishSession();
   }
 
   void submit(String answer) throws Exception {
@@ -970,6 +1059,8 @@ public final class MainActivity extends Activity {
     store.record(cid, record, ok, true);
     position++;
     saveSession();
+    boolean choice = q.type.equals("choice") || q.type.equals("listen");
+    if (choice) showOptionResult(q, answer);
     LinearLayout feedback = card(body);
     feedback.setBackground(
         new AdventureArt.Face(
@@ -1009,7 +1100,27 @@ public final class MainActivity extends Activity {
       feedback.setTranslationY(dp(16));
       feedback.animate().alpha(1).translationY(0).setDuration(240).start();
     }
-    scroll.post(() -> scroll.smoothScrollTo(0, body.getBottom()));
+    if (!choice) scroll.post(() -> scroll.smoothScrollTo(0, body.getBottom()));
+  }
+
+  void showOptionResult(Learning.Question q, String answer) {
+    for (int i = 0; i < body.getChildCount(); i++) {
+      View child = body.getChildAt(i);
+      if (!(child instanceof Button b) || !"option".equals(b.getTag())) continue;
+      String option = b.getText().toString();
+      boolean correct = Learning.matches(option, q.answer);
+      boolean selected = option.equals(answer);
+      b.setEnabled(false);
+      b.setTextColor(correct ? GREEN : selected ? RED : MUTED);
+      if (correct || selected) {
+        GradientDrawable result = shape(correct ? LIME : Color.rgb(255, 235, 235), 18);
+        result.setStroke(dp(1.5f), correct ? GREEN : RED);
+        b.setBackground(result);
+        b.setText(
+            getString(correct ? R.string.quiz_option_correct : R.string.quiz_option_wrong, option));
+        b.setContentDescription(option + (correct ? "，正确答案" : "，你选的答案，回答错误"));
+      }
+    }
   }
 
   void finishSession() throws Exception {
@@ -1529,7 +1640,16 @@ public final class MainActivity extends Activity {
     if (store.courses(false).isEmpty()) {
       empty("还没有创建课程", "点击上方「创建课程」，选择课文图片开始制作。");
     }
+    Map<String, JSONObject> lessons = new LinkedHashMap<>();
     for (JSONObject c : store.courses(false)) {
+      JSONObject previous = lessons.get(Store.lessonId(c));
+      if (previous == null
+          || c.optBoolean("published")
+          || (!previous.optBoolean("published")
+              && c.optLong("createdAt") > previous.optLong("createdAt")))
+        lessons.put(Store.lessonId(c), c);
+    }
+    for (JSONObject c : lessons.values()) {
       String id = c.getString("id");
       LinearLayout box = card(body);
       LinearLayout top = row();
@@ -1556,7 +1676,94 @@ public final class MainActivity extends Activity {
               MUTED,
               false));
       action(box, "查看、校对与发布  →", false, () -> materials(id, true));
+      if (store.isDraft(c)) add(box, text(Store.draftName(c), 12, MUTED, false));
+      action(box, "草稿与版本 · " + store.versions(c).size(), false, () -> courseVersions(c));
     }
+  }
+
+  String courseVersionName(JSONObject course) throws Exception {
+    if (store.isDraft(course)) return Store.draftName(course);
+    String status = course.optBoolean("published") ? "当前已发布" : "历史版本";
+    if (course.optLong("createdAt") <= 0) return status;
+    return status
+        + " · "
+        + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA)
+            .format(new Date(course.optLong("createdAt")));
+  }
+
+  void courseVersions(JSONObject course) throws Exception {
+    if (!parent || busy) return;
+    List<JSONObject> versions = store.versions(course);
+    LinearLayout list = col();
+    list.setPadding(dp(20), dp(8), dp(20), dp(12));
+    ScrollView sc = new ScrollView(this);
+    sc.addView(list);
+    AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle("草稿与版本")
+            .setView(sc)
+            .setPositiveButton("新建草稿", null)
+            .setNegativeButton("关闭", null)
+            .create();
+    for (JSONObject version : versions) {
+      String id = version.getString("id");
+      LinearLayout box = card(list);
+      add(box, text(courseVersionName(version), 14, GREEN, true));
+      space(box, 6);
+      add(box, text(version.getString("title"), 18, INK, true));
+      Button edit =
+          button(
+              store.isDraft(version) ? "编辑此草稿" : "查看与编辑",
+              true,
+              () -> {
+                dialog.dismiss();
+                materials(id, true);
+              });
+      edit.setTag("draft:open:" + id);
+      add(box, edit);
+      if (store.isDraft(version)) {
+        Button remove = button("删除草稿", false, () -> confirmDeleteDraft(version, dialog));
+        remove.setTag("draft:delete:" + id);
+        add(box, remove);
+      }
+    }
+    dialog.show();
+    dialog.getButton(-1).setTag("draft:new");
+    dialog
+        .getButton(-1)
+        .setOnClickListener(
+            v ->
+                safe(
+                    () -> {
+                      if (!parent || busy) return;
+                      JSONObject draft = store.newDraft(course.getString("id"));
+                      dialog.dismiss();
+                      materials(draft.getString("id"), true);
+                    }));
+  }
+
+  void confirmDeleteDraft(JSONObject draft, AlertDialog picker) throws Exception {
+    if (!parent || busy) return;
+    new AlertDialog.Builder(this)
+        .setTitle("删除这份草稿？")
+        .setMessage(Store.draftName(draft) + "\n" + draft.getString("title"))
+        .setPositiveButton(
+            "删除草稿",
+            (d, w) ->
+                safe(
+                    () -> {
+                      if (!parent || busy) return;
+                      store.deleteDraft(draft.getString("id"));
+                      picker.dismiss();
+                      List<JSONObject> remaining = store.versions(draft);
+                      if (remaining.isEmpty()) courses();
+                      else {
+                        materials(remaining.get(0).getString("id"), true);
+                        courseVersions(remaining.get(0));
+                      }
+                    }))
+        .setNegativeButton("取消", null)
+        .show();
   }
 
   EditText field(LinearLayout p, String hint, String value, boolean password) {
@@ -1668,7 +1875,7 @@ public final class MainActivity extends Activity {
           true,
           () -> {
             if (list.length() == 0) throw new Exception("请先选择课文图片");
-            if (secrets.get().isEmpty()) throw new Exception("请先前往家长设置，导入 llm info.txt 配置");
+            if (secrets.get().isEmpty()) throw new Exception("请先前往家长设置，填写模型服务地址、模型名称和密钥");
             List<File> files = new ArrayList<>();
             for (int i = 0; i < list.length(); i++)
               files.add(new File(store.root, list.getString(i)));
@@ -1731,6 +1938,7 @@ public final class MainActivity extends Activity {
       return;
     }
     busy = true;
+    if (materialControlsChanged != null) materialControlsChanged.run();
     status = message;
     updateStatus(message);
     jobs.submit(
@@ -1746,9 +1954,9 @@ public final class MainActivity extends Activity {
               () -> {
                 busy = false;
                 if (isFinishing() || isDestroyed()) return;
+                if (materialControlsChanged != null) materialControlsChanged.run();
                 if (error != null) {
                   status = "未完成：" + error.getMessage();
-                  toast(status);
                   if (parent)
                     safe(
                         () -> {
@@ -1756,6 +1964,7 @@ public final class MainActivity extends Activity {
                           else if (page.equals("materials")) materials(selectedId, true);
                           else settings();
                         });
+                  toast(status);
                 } else {
                   status = "操作完成";
                   if (parent) safe(success);
@@ -1779,102 +1988,87 @@ public final class MainActivity extends Activity {
     JSONObject c = store.course(id);
     selectedId = id;
     screen("materials", admin ? "课程工作台" : "学习路线", false);
-    heading(c.getString("title"), c.optString("subtitle"));
-    boolean editable =
-        admin && !c.optBoolean("published") && store.progress(id).optInt("attempted") == 0;
+    boolean editable = admin;
+    LinearLayout courseTitle = col();
+    courseTitle.setMinimumHeight(dp(48));
+    courseTitle.setTag("material:title");
+    LinearLayout titleRow = row();
+    weight(titleRow, text(c.getString("title"), 28, INK, true));
+    if (editable)
+      titleRow.addView(
+          new AdventureArt.Icon(this, "write", GREEN),
+          new LinearLayout.LayoutParams(dp(22), dp(22)));
+    add(courseTitle, titleRow);
+    if (!c.optString("subtitle").isEmpty()) {
+      space(courseTitle, 6);
+      add(courseTitle, text(c.optString("subtitle"), 14, MUTED, false));
+    }
+    if (editable) {
+      courseTitle.setOnClickListener(
+          v -> {
+            if (!busy) safe(() -> editMeta(c));
+          });
+      courseTitle.setFocusable(true);
+      courseTitle.setContentDescription(c.getString("title") + "，点击修改标题与主题");
+      courseTitle.setTooltipText("修改标题与主题");
+    }
+    add(body, courseTitle);
+    space(body, 18);
     if (admin) {
       LinearLayout info = card(body);
-      add(info, text(c.optBoolean("published") ? "课程已发布，学生可以开始学习" : "课程草稿 · 校对后发布", 19, INK, true));
-      space(info, 7);
-      add(
-          info,
-          text(
-              "朗读音频 " + audio.cached(c) + " / " + audio.texts(c).size() + " 已就绪", 14, GREEN, true));
+      info.setPadding(dp(14), dp(12), dp(14), dp(14));
+      LinearLayout controls = row(), summary = col();
+      add(summary, text(courseVersionName(c), 15, INK, true));
+      space(summary, 3);
+      int cached = audio.cached(c), total = audio.texts(c).size();
+      add(summary, text("离线音频 " + cached + " / " + total, 12, GREEN, false));
+      weight(controls, summary);
+      ImageButton download =
+          materialIcon(
+              "material:audio",
+              "下载/补全离线音频",
+              cached == total ? "download_done" : "download",
+              false,
+              () ->
+                  runJob(
+                      "正在准备离线音频…",
+                      () -> audio.download(c, this::updateStatus),
+                      () -> materials(id, true)));
+      controls.addView(download, new LinearLayout.LayoutParams(dp(48), dp(48)));
+      View gap = new View(this);
+      controls.addView(gap, new LinearLayout.LayoutParams(dp(8), 1));
+      ImageButton publish =
+          materialIcon(
+              "material:publish",
+              c.optBoolean("published") ? "已发布，点击下架" : "校对完成，发布课程",
+              c.optBoolean("published") ? "published" : "publish",
+              true,
+              () -> changeCoursePublication(c));
+      publish.setSelected(c.optBoolean("published"));
+      controls.addView(publish, new LinearLayout.LayoutParams(dp(48), dp(48)));
+      add(info, controls);
+      materialControlsChanged =
+          () -> {
+            download.setEnabled(!busy);
+            publish.setEnabled(!busy);
+            courseTitle.setEnabled(!busy);
+            download.setAlpha(busy ? .45f : 1f);
+            publish.setAlpha(busy ? .45f : 1f);
+            download.setContentDescription(busy ? "音频制作中，请稍候" : "下载/补全离线音频");
+          };
+      materialControlsChanged.run();
+      if (!c.optString("note").isEmpty()) {
+        space(info, 8);
+        add(info, text("识别备注：" + c.optString("note"), 12, MUTED, false));
+      }
+      action(info, "草稿与版本 · " + store.versions(c).size(), false, () -> courseVersions(c));
       space(info, 8);
-      if (!c.optString("note").isEmpty())
-        add(info, text("识别备注：" + c.optString("note"), 13, MUTED, false));
-      if (editable) action(info, "修改标题与主题", false, () -> editMeta(c));
-      else
-        action(
-            info,
-            "复制为新草稿并编辑",
-            false,
-            () -> {
-              JSONObject copy = Store.copy(c);
-              copy.put("id", "course_" + UUID.randomUUID().toString().replace("-", ""))
-                  .put("published", false)
-                  .put("reviewed", false)
-                  .put("createdAt", System.currentTimeMillis());
-              store.saveCourse(copy);
-              materials(copy.getString("id"), true);
-            });
-      action(
-          info,
-          busy ? "音频制作中…" : "下载 / 补全离线音频",
-          false,
-          () ->
-              runJob(
-                  "正在准备离线音频…",
-                  () -> audio.download(c, this::updateStatus),
-                  () -> materials(id, true)));
-      if (c.optBoolean("published"))
-        action(
-            info,
-            "下架课程",
-            false,
-            () ->
-                new AlertDialog.Builder(this)
-                    .setTitle("下架这门课程？")
-                    .setMessage("学生将暂时看不到这门课，已有进度会保留。")
-                    .setPositiveButton(
-                        "下架",
-                        (d, w) ->
-                            safe(
-                                () -> {
-                                  c.put("published", false);
-                                  store.saveCourse(c);
-                                  materials(id, true);
-                                }))
-                    .setNegativeButton("取消", null)
-                    .show());
-      else
-        action(
-            info,
-            "校对完成，发布课程  →",
-            true,
-            () -> {
-              Store.validate(c, true);
-              if (audio.cached(c) < audio.texts(c).size())
-                throw new Exception("请先下载完整音频，保证学生可以离线学习");
-              CheckBox check = new CheckBox(this);
-              check.setText("我已逐句核对原图、翻译和理解题答案");
-              check.setPadding(dp(20), dp(14), dp(20), dp(14));
-              AlertDialog d =
-                  new AlertDialog.Builder(this)
-                      .setTitle("发布到学生学习岛")
-                      .setMessage("发布后建议通过复制草稿修改素材，以保留已有学习记录。")
-                      .setView(check)
-                      .setPositiveButton("发布", null)
-                      .setNegativeButton("再检查一下", null)
-                      .create();
-              d.setOnShowListener(
-                  x ->
-                      d.getButton(-1)
-                          .setOnClickListener(
-                              v ->
-                                  safe(
-                                      () -> {
-                                        if (!check.isChecked()) throw new Exception("请先确认已经校对");
-                                        c.put("published", true).put("reviewed", true);
-                                        store.saveCourse(c);
-                                        d.dismiss();
-                                        toast("课程已发布");
-                                        materials(id, true);
-                                      })));
-              d.show();
-            });
-      space(info, 12);
-      statusView = text(busy ? status : "图片与 AI 生成结果请人工核对。", 12, MUTED, false);
+      statusView =
+          text(
+              busy ? status : store.isDraft(c) ? "核对原图、译文和答案后即可发布。" : "直接编辑会自动保存为新草稿。",
+              12,
+              MUTED,
+              false);
       add(info, statusView);
     }
     LinearLayout tabs = row();
@@ -1898,31 +2092,21 @@ public final class MainActivity extends Activity {
     space(body, 18);
     if (materialTab == 0) {
       materialHint(editable);
-      List<String> items = new ArrayList<>();
       JSONArray a = c.getJSONArray("sentences");
       for (int i = 0; i < a.length(); i++) {
-        JSONObject s = a.getJSONObject(i);
-        int index = i;
-        items.add(s.getString("en"));
-        LinearLayout box = card(body);
-        bindMaterialCard(
-            box,
-            c,
-            "sentences",
-            index,
-            items,
-            editable,
-            String.format(Locale.CHINA, "%02d", i + 1)
-                + (s.optString("speaker").isEmpty() ? "" : "  /  " + s.optString("speaker")));
-        space(box, 10);
-        add(box, text(s.getString("en"), 21, INK, true));
-        space(box, 9);
-        add(box, text(s.getString("zh"), 15, MUTED, false));
+        materialItems.add(a.getJSONObject(i).getString("en"));
+        materialAudioFiles.add(Audio.itemFile(a.getJSONObject(i)));
       }
+      LinearLayout paper = card(body);
+      paper.setBackground(outline(Color.WHITE, LINE));
+      java.util.function.IntConsumer editSentence =
+          editable ? index -> editMaterial(c, "sentences", index, index) : null;
+      passage = new PassageView(this, a, this::tapMaterial, editSentence);
+      passage.setTag("passage:bilingual");
+      add(paper, passage);
       if (editable) action(body, "＋  添加句子", false, () -> editItem(c, "sentences", -1));
     } else if (materialTab == 1) {
       materialHint(editable);
-      List<String> items = new ArrayList<>();
       JSONArray a = c.getJSONArray("vocabulary");
       for (String kind : new String[] {"word", "phrase", "sentence"}) {
         add(
@@ -1937,16 +2121,16 @@ public final class MainActivity extends Activity {
           JSONObject v = a.getJSONObject(i);
           if (!kind.equals(v.optString("kind"))) continue;
           int index = i;
-          items.add(v.getString("en"));
+          materialItems.add(v.getString("en"));
+          materialAudioFiles.add(Audio.itemFile(v));
           LinearLayout box = card(body);
           bindMaterialCard(
               box,
               c,
               "vocabulary",
               index,
-              items,
               editable,
-              String.format(Locale.CHINA, "%02d", items.size()));
+              String.format(Locale.CHINA, "%02d", materialItems.size()));
           space(box, 8);
           add(box, text(v.getString("en"), 21, INK, true));
           if (!v.optString("phonetic").isEmpty()) {
@@ -2004,6 +2188,76 @@ public final class MainActivity extends Activity {
     }
   }
 
+  ImageButton materialIcon(
+      String tag, String description, String symbol, boolean primary, Task task) {
+    ImageButton icon = new ImageButton(this);
+    icon.setTag(tag);
+    icon.setContentDescription(description);
+    icon.setTooltipText(description);
+    icon.setImageDrawable(new AdventureArt.Symbol(symbol, GREEN));
+    icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    icon.setPadding(dp(10), dp(10), dp(10), dp(12));
+    icon.setMinimumWidth(dp(48));
+    icon.setMinimumHeight(dp(48));
+    icon.setBackground(
+        new AdventureArt.Face(
+            this, primary ? LIME : Color.WHITE, primary ? Color.rgb(183, 214, 150) : LINE, 15, 3));
+    icon.setStateListAnimator(null);
+    icon.setOnClickListener(v -> safe(task));
+    return icon;
+  }
+
+  void changeCoursePublication(JSONObject c) throws Exception {
+    if (!parent || busy) return;
+    String id = c.getString("id");
+    if (c.optBoolean("published")) {
+      new AlertDialog.Builder(this)
+          .setTitle("下架这门课程？")
+          .setMessage("学生将暂时看不到这门课，已有进度会保留。")
+          .setPositiveButton(
+              "下架",
+              (d, w) ->
+                  safe(
+                      () -> {
+                        if (!parent) return;
+                        store.setPublished(id, false);
+                        materials(id, true);
+                      }))
+          .setNegativeButton("取消", null)
+          .show();
+      return;
+    }
+    Store.validate(c, true);
+    if (audio.cached(c) < audio.texts(c).size()) throw new Exception("请先下载完整音频，保证学生可以离线学习");
+    CheckBox check = new CheckBox(this);
+    check.setText("我已逐句核对原图、翻译和理解题答案");
+    check.setPadding(dp(20), dp(14), dp(20), dp(14));
+    AlertDialog dialog =
+        new AlertDialog.Builder(this)
+            .setTitle("发布到学生学习岛")
+            .setMessage("这份草稿将成为学生看到的当前版本，其他草稿和旧版本的学习记录保留。")
+            .setView(check)
+            .setPositiveButton("发布", null)
+            .setNegativeButton("再检查一下", null)
+            .create();
+    dialog.setOnShowListener(
+        x ->
+            dialog
+                .getButton(-1)
+                .setOnClickListener(
+                    v ->
+                        safe(
+                            () -> {
+                              if (!parent) return;
+                              if (!check.isChecked()) throw new Exception("请先确认已经校对");
+                              store.setPublished(id, true);
+                              dialog.dismiss();
+                              toast("课程已发布");
+                              materials(id, true);
+                            })));
+    dialog.show();
+  }
+
   void materialHint(boolean editable) {
     add(body, text("轻点连播，再点当前内容停止。" + (editable ? "\n长按未播放的内容可编辑。" : ""), 13, MUTED, false));
     space(body, 14);
@@ -2021,7 +2275,6 @@ public final class MainActivity extends Activity {
       JSONObject course,
       String array,
       int sourceIndex,
-      List<String> items,
       boolean editable,
       String number)
       throws Exception {
@@ -2046,31 +2299,40 @@ public final class MainActivity extends Activity {
     box.setForeground(
         new android.graphics.drawable.RippleDrawable(
             ColorStateList.valueOf(Color.argb(30, 12, 119, 99)), null, shape(Color.WHITE, 24)));
-    box.setOnClickListener(
-        v -> {
-          if (materialPlaying == playbackIndex) audio.stop();
-          else {
-            followMaterialPlayback = true;
-            audio.setSpeed(1f);
-            audio.playList(items, playbackIndex, this::showMaterialPlaying, this::toast);
-          }
-        });
+    box.setOnClickListener(v -> tapMaterial(playbackIndex));
     if (editable)
       box.setOnLongClickListener(
           v -> {
-            if (materialPlaying == playbackIndex) {
-              toast("先轻点停止朗读，再长按编辑");
-            } else {
-              audio.stop();
-              safe(() -> editItem(course, array, sourceIndex));
-            }
+            editMaterial(course, array, sourceIndex, playbackIndex);
             return true;
           });
   }
 
+  void tapMaterial(int index) {
+    if (lastToast != null) lastToast.cancel();
+    if (materialPlaying == index) audio.stop();
+    else {
+      followMaterialPlayback = true;
+      audio.setSpeed(isReadingLesson() ? readingSpeed : 1f);
+      audio.playList(
+          materialItems, materialAudioFiles, index, this::showMaterialPlaying, this::toast);
+    }
+  }
+
+  void editMaterial(JSONObject course, String array, int sourceIndex, int playbackIndex) {
+    if (materialPlaying == playbackIndex) toast("先轻点停止朗读，再长按编辑");
+    else {
+      audio.stop();
+      safe(() -> editItem(course, array, sourceIndex));
+    }
+  }
+
   void showMaterialPlaying(int index) {
-    if (!page.equals("materials")) return;
+    boolean reading = isReadingLesson();
+    if (!page.equals("materials") && !reading) return;
     materialPlaying = index;
+    if (passage != null) passage.highlight(index);
+    if (reading && readingControlsChanged != null) readingControlsChanged.run();
     for (int i = 0; i < materialCards.size(); i++) {
       boolean active = i == index;
       materialCards.get(i).setSelected(active);
@@ -2081,10 +2343,36 @@ public final class MainActivity extends Activity {
                   this, active ? AdventureArt.SKY : Color.WHITE, active ? GREEN : LINE, 24, 3));
       materialStates.get(i).setVisibility(active ? View.VISIBLE : View.GONE);
     }
-    if (index < 0 || index >= materialCards.size()) {
+    if (index < 0 || index >= materialItems.size()) {
       if (materialPlaybackBar != null) materialPlaybackBar.setVisibility(View.GONE);
       return;
     }
+    if (reading) {
+      readingIndex = index;
+      safe(this::saveSession);
+    } else showMaterialPlaybackBar();
+    View current = passage != null ? passage : materialCards.get(index);
+    scroll.post(
+        () -> {
+          if (followMaterialPlayback
+              && materialPlaying == index
+              && materialItems.size() > index
+              && current.isAttachedToWindow()) {
+            Rect rect = new Rect();
+            if (current instanceof PassageView passage) {
+              if (!passage.sentenceBounds(index, rect)) return;
+            } else current.getDrawingRect(rect);
+            scroll.offsetDescendantRectToMyCoords(current, rect);
+            if (current instanceof PassageView) {
+              int top = scroll.getScrollY(), bottom = top + scroll.getHeight();
+              if (rect.top < top + dp(12) || rect.bottom > bottom - dp(20))
+                scroll.smoothScrollTo(0, Math.max(0, rect.top - scroll.getHeight() / 4));
+            } else scroll.smoothScrollTo(0, Math.max(0, rect.top - dp(12)));
+          }
+        });
+  }
+
+  void showMaterialPlaybackBar() {
     if (materialPlaybackBar == null) {
       materialPlaybackBar = col();
       materialPlaybackBar.setPadding(dp(20), dp(8), dp(20), dp(8));
@@ -2109,19 +2397,6 @@ public final class MainActivity extends Activity {
     }
     materialPlaybackBar.setVisibility(View.VISIBLE);
     updateMaterialPlaybackStatus();
-    LinearLayout current = materialCards.get(index);
-    scroll.post(
-        () -> {
-          if (followMaterialPlayback
-              && materialPlaying == index
-              && materialCards.size() > index
-              && materialCards.get(index) == current) {
-            Rect rect = new Rect();
-            current.getDrawingRect(rect);
-            scroll.offsetDescendantRectToMyCoords(current, rect);
-            scroll.smoothScrollTo(0, Math.max(0, rect.top - dp(12)));
-          }
-        });
   }
 
   void updateMaterialPlaybackStatus() {
@@ -2130,7 +2405,7 @@ public final class MainActivity extends Activity {
           getString(
               R.string.material_playback_status,
               materialPlaying + 1,
-              materialCards.size(),
+              materialItems.size(),
               getString(
                   followMaterialPlayback
                       ? R.string.material_stop_hint
@@ -2140,6 +2415,11 @@ public final class MainActivity extends Activity {
   }
 
   void editMeta(JSONObject c) throws Exception {
+    JSONObject draft = prepareCourseEdit(c);
+    if (!draft.getString("id").equals(c.getString("id"))) {
+      editMeta(draft);
+      return;
+    }
     LinearLayout form = col();
     form.setPadding(dp(20), 0, dp(20), dp(20));
     EditText t = field(form, "课文标题", c.getString("title"), false),
@@ -2161,7 +2441,7 @@ public final class MainActivity extends Activity {
                               JSONObject copy = Store.copy(c);
                               copy.put("title", t.getText().toString().trim())
                                   .put("subtitle", sub.getText().toString().trim());
-                              store.saveCourse(copy);
+                              store.saveDraft(copy);
                               d.dismiss();
                               materials(copy.getString("id"), true);
                             })));
@@ -2169,6 +2449,11 @@ public final class MainActivity extends Activity {
   }
 
   void editItem(JSONObject c, String array, int index) throws Exception {
+    JSONObject draft = prepareCourseEdit(c);
+    if (!draft.getString("id").equals(c.getString("id"))) {
+      editItem(draft, array, index);
+      return;
+    }
     JSONArray a = c.getJSONArray(array);
     JSONObject item = index < 0 ? new JSONObject() : a.getJSONObject(index);
     boolean vocab = array.equals("vocabulary");
@@ -2191,6 +2476,9 @@ public final class MainActivity extends Activity {
     EditText extra =
         field(form, vocab ? "用法提示" : "人物（可留空）", item.optString(vocab ? "note" : "speaker"), false);
     EditText phonetic = vocab ? field(form, "音标（可留空）", item.optString("phonetic"), false) : null;
+    if (itemAudioEditor != null && itemAudioEditor.dialog != null) itemAudioEditor.dialog.dismiss();
+    ItemAudioEditor editor = new ItemAudioEditor(this, form, en, item);
+    itemAudioEditor = editor;
     ScrollView sc = new ScrollView(this);
     sc.addView(form);
     AlertDialog.Builder builder =
@@ -2201,8 +2489,10 @@ public final class MainActivity extends Activity {
             .setNegativeButton("取消", null);
     if (index >= 0) builder.setNeutralButton("删除", null);
     AlertDialog d = builder.create();
+    editor.bind(d);
     d.setOnShowListener(
         x -> {
+          editor.refresh();
           d.getButton(-1)
               .setOnClickListener(
                   v ->
@@ -2227,7 +2517,10 @@ public final class MainActivity extends Activity {
                             if (index < 0) items.put(value);
                             else items.put(index, value);
                             copy.put("reviewed", false);
-                            store.saveCourse(copy);
+                            Store.validate(copy, false);
+                            editor.attachTo(value);
+                            store.saveDraft(copy);
+                            editor.markSaved();
                             d.dismiss();
                             materials(copy.getString("id"), true);
                           }));
@@ -2239,7 +2532,7 @@ public final class MainActivity extends Activity {
                             () -> {
                               JSONObject copy = Store.copy(c);
                               copy.getJSONArray(array).remove(index);
-                              store.saveCourse(copy);
+                              store.saveDraft(copy);
                               d.dismiss();
                               materials(copy.getString("id"), true);
                             }));
@@ -2248,6 +2541,11 @@ public final class MainActivity extends Activity {
   }
 
   void editQuestion(JSONObject c, int index) throws Exception {
+    JSONObject draft = prepareCourseEdit(c);
+    if (!draft.getString("id").equals(c.getString("id"))) {
+      editQuestion(draft, index);
+      return;
+    }
     JSONArray a = c.getJSONArray("questions");
     JSONObject q = index < 0 ? new JSONObject() : a.getJSONObject(index);
     LinearLayout form = col();
@@ -2301,7 +2599,7 @@ public final class MainActivity extends Activity {
                                     .put("explanation", exp.getText().toString().trim());
                             if (index < 0) copy.getJSONArray("questions").put(value);
                             else copy.getJSONArray("questions").put(index, value);
-                            store.saveCourse(copy);
+                            store.saveDraft(copy);
                             d.dismiss();
                             materials(copy.getString("id"), true);
                           }));
@@ -2313,12 +2611,23 @@ public final class MainActivity extends Activity {
                             () -> {
                               JSONObject copy = Store.copy(c);
                               copy.getJSONArray("questions").remove(index);
-                              store.saveCourse(copy);
+                              store.saveDraft(copy);
                               d.dismiss();
                               materials(copy.getString("id"), true);
                             }));
         });
     d.show();
+  }
+
+  JSONObject prepareCourseEdit(JSONObject course) throws Exception {
+    if (!parent) throw new Exception("请先进入家长模式");
+    if (busy) throw new Exception("正在制作音频，请稍候再编辑");
+    JSONObject draft = store.editableDraft(course.getString("id"));
+    if (!draft.getString("id").equals(course.getString("id"))) {
+      materials(draft.getString("id"), true);
+      toast("已自动创建新草稿");
+    }
+    return draft;
   }
 
   void settings() throws Exception {
@@ -2331,8 +2640,7 @@ public final class MainActivity extends Activity {
     boolean hasSavedKey = !secrets.get().isEmpty();
     add(
         config,
-        text(hasSavedKey ? "API 密钥已加密保存在本机。" : "尚未配置 API。可直接导入 llm info.txt。", 14, MUTED, false));
-    action(config, "导入 llm info.txt 配置", true, () -> pickFile(102, "text/*"));
+        text(hasSavedKey ? "API 密钥已加密保存在本机。" : "填写服务地址、模型名称和 API 密钥后即可制课。", 14, MUTED, false));
     EditText base = field(config, "API 地址（HTTPS）", ai.base(), false),
         model = field(config, "图片识别与课程模型", ai.model(), false),
         tts =
@@ -2342,47 +2650,88 @@ public final class MainActivity extends Activity {
                 getSharedPreferences("config", 0).getString("tts", "mimo-v2.5-tts"),
                 false),
         key = apiKeyField(config, hasSavedKey);
-    action(
-        config,
-        "保存 API 设置",
-        false,
-        () -> {
-          String url = base.getText().toString().trim().replaceAll("/+$", "");
-          java.net.URI uri;
-          try {
-            uri = java.net.URI.create(url);
-          } catch (Exception e) {
-            throw new Exception("请输入有效 HTTPS 地址");
+    base.setTag("config:base");
+    model.setTag("config:model");
+    tts.setTag("config:tts");
+    space(config, 16);
+    add(config, text("语音生成与试听", 18, INK, true));
+    space(config, 8);
+    add(config, text("语速和音色用于新生成的音频，已有音频可在校对时重新生成。", 13, MUTED, false));
+    String savedVoice = getSharedPreferences("config", 0).getString("ttsVoice", "Mia");
+    List<String> voiceChoices = new ArrayList<>(Arrays.asList(ServiceConfig.VOICES));
+    voiceChoices.add("自定义音色…");
+    int voiceIndex = voiceChoices.indexOf(savedVoice);
+    Spinner voice =
+        selection(
+            config,
+            "音色",
+            voiceChoices.toArray(new String[0]),
+            voiceIndex >= 0 ? voiceIndex : voiceChoices.size() - 1);
+    voice.setTag("config:voice");
+    EditText customVoice = field(config, "音色名称", voiceIndex >= 0 ? "" : savedVoice, false);
+    customVoice.setVisibility(voiceIndex >= 0 ? View.GONE : View.VISIBLE);
+    customVoice.setTag("config:customVoice");
+    voice.setOnItemSelectedListener(
+        new AdapterView.OnItemSelectedListener() {
+          public void onItemSelected(AdapterView<?> p, View view, int position, long id) {
+            customVoice.setVisibility(
+                position == voiceChoices.size() - 1 ? View.VISIBLE : View.GONE);
           }
-          if (!"https".equals(uri.getScheme())
-              || uri.getHost() == null
-              || uri.getUserInfo() != null
-              || uri.getQuery() != null) throw new Exception("请输入有效 HTTPS API 地址");
-          String m = model.getText().toString().trim(), t = tts.getText().toString().trim();
-          if (m.isEmpty() || t.isEmpty()) throw new Exception("请填写模型名称");
-          if (!key.getText().toString().trim().isEmpty())
-            secrets.set(key.getText().toString().trim());
-          getSharedPreferences("config", 0)
-              .edit()
-              .putString("base", url)
-              .putString("model", m)
-              .putString("tts", t)
-              .commit();
-          toast("API 设置已保存");
-          settings();
+
+          public void onNothingSelected(AdapterView<?> p) {}
         });
-    action(
-        config,
-        "测试模型连接",
-        false,
-        () ->
-            runJob(
-                "正在测试连接…",
-                () -> ai.test(),
-                () -> {
-                  settings();
-                  toast("模型连接成功");
-                }));
+    String savedPace = getSharedPreferences("config", 0).getString("ttsPace", "slow");
+    Spinner pace =
+        selection(
+            config,
+            "生成语速",
+            ServiceConfig.PACE_LABELS,
+            Math.max(0, Arrays.asList(ServiceConfig.PACES).indexOf(savedPace)));
+    pace.setTag("config:pace");
+    EditText sample = field(config, "试听英文", "Hello! Welcome to Lesson Island.", false);
+    sample.setTag("config:previewText");
+    List<View> controls =
+        new ArrayList<>(Arrays.asList(base, model, tts, key, voice, customVoice, pace, sample));
+    Button save =
+        button(
+            "保存 API 设置",
+            false,
+            () -> {
+              ServiceConfig snapshot = serviceForm(base, model, tts, key, voice, customVoice, pace);
+              snapshot.save(this, secrets, key.getText().toString());
+              settings();
+              toast("API 设置已保存");
+            });
+    space(config, 10);
+    add(config, save);
+    controls.add(save);
+    Button testModel =
+        button(
+            "测试模型连接",
+            false,
+            () -> testService(serviceForm(base, model, tts, key, voice, customVoice, pace), null));
+    space(config, 8);
+    add(config, testModel);
+    controls.add(testModel);
+    Button testVoice =
+        button(
+            "测试语音并试听",
+            true,
+            () -> {
+              String sentence = sample.getText().toString().trim();
+              if (sentence.isEmpty() || sentence.length() > 300)
+                throw new Exception("请填写 1–300 字的试听英文");
+              testService(serviceForm(base, model, tts, key, voice, customVoice, pace), sentence);
+            });
+    space(config, 8);
+    add(config, testVoice);
+    controls.add(testVoice);
+    action(config, "停止试听", false, () -> audio.stop());
+    serviceControlsChanged =
+        () -> {
+          for (View view : controls) view.setEnabled(!busy);
+        };
+    serviceControlsChanged.run();
     space(config, 10);
     statusView = text(status, 13, MUTED, false);
     add(config, statusView);
@@ -2488,6 +2837,91 @@ public final class MainActivity extends Activity {
             12,
             MUTED,
             false));
+  }
+
+  Spinner selection(LinearLayout form, String title, String[] choices, int selected) {
+    space(form, 10);
+    add(form, text(title, 13, MUTED, true));
+    Spinner spinner = new Spinner(this);
+    spinner.setAdapter(
+        new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, choices));
+    spinner.setSelection(selected);
+    spinner.setMinimumHeight(dp(48));
+    spinner.setPadding(dp(10), dp(4), dp(10), dp(4));
+    spinner.setBackground(outline(Color.WHITE, LINE));
+    add(form, spinner);
+    return spinner;
+  }
+
+  ServiceConfig serviceForm(
+      EditText base,
+      EditText model,
+      EditText tts,
+      EditText key,
+      Spinner voice,
+      EditText customVoice,
+      Spinner pace)
+      throws Exception {
+    String entered = key.getText().toString().trim();
+    String selectedVoice =
+        voice.getSelectedItemPosition() == ServiceConfig.VOICES.length
+            ? customVoice.getText().toString().trim()
+            : voice.getSelectedItem().toString();
+    return new ServiceConfig(
+        base.getText().toString(),
+        model.getText().toString(),
+        tts.getText().toString(),
+        entered.isEmpty() ? secrets.get() : entered,
+        selectedVoice,
+        ServiceConfig.PACES[pace.getSelectedItemPosition()]);
+  }
+
+  void testService(ServiceConfig snapshot, String sample) {
+    if (busy) {
+      toast("正在完成上一项测试，请稍候");
+      return;
+    }
+    LinearLayout owner = shell;
+    if (sample != null) audio.stop();
+    busy = true;
+    if (serviceControlsChanged != null) serviceControlsChanged.run();
+    updateStatus(sample == null ? "正在测试模型连接…" : "正在生成试听音频…");
+    jobs.submit(
+        () -> {
+          File file = null;
+          String failure = null;
+          try {
+            if (sample == null) new AiClient(this, snapshot).test();
+            else file = audio.generate(sample, snapshot);
+          } catch (Exception e) {
+            failure = e.getMessage() == null ? "服务测试失败，请重试" : e.getMessage();
+          }
+          File result = file;
+          String error = failure;
+          runOnUiThread(
+              () -> {
+                busy = false;
+                if (serviceControlsChanged != null) serviceControlsChanged.run();
+                if (isDestroyed() || isFinishing() || !parent || owner != shell) {
+                  if (result != null) result.delete();
+                  return;
+                }
+                if (error != null) {
+                  updateStatus("测试未通过：" + error);
+                  toast(status);
+                  return;
+                }
+                if (result != null) {
+                  audio.stop();
+                  if (voicePreview != null) voicePreview.delete();
+                  voicePreview = result;
+                  audio.setSpeed(1f);
+                  audio.playFile(result, this::toast);
+                  updateStatus("语音测试成功，正在试听当前音色与语速。");
+                } else updateStatus("模型连接成功");
+                toast(status);
+              });
+        });
   }
 
   EditText apiKeyField(LinearLayout target, boolean hasSavedKey) {
@@ -2606,36 +3040,6 @@ public final class MainActivity extends Activity {
             status = "";
             importScreen();
           }
-          if (request == 102) {
-            String txt;
-            try (InputStream input = getContentResolver().openInputStream(data.getData())) {
-              byte[] bytes = Store.bytes(input, 16384);
-              if (bytes.length > 16384) throw new Exception("配置文件过大");
-              txt = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            }
-            Matcher url = Pattern.compile("https?://\\S+").matcher(txt);
-            String endpoint = url.find() ? url.group() : "https://api.xiaomimimo.com/v1";
-            Matcher k = Pattern.compile("sk-[A-Za-z0-9_-]+").matcher(txt);
-            String secret = k.find() ? k.group() : "";
-            if (secret.isEmpty()) {
-              Matcher generic =
-                  Pattern.compile(
-                          "(?m)^\\s*(?:api[_ -]?key\\s*[:=]\\s*)?([A-Za-z0-9_-]{24,})\\s*$",
-                          Pattern.CASE_INSENSITIVE)
-                      .matcher(txt);
-              if (generic.find()) secret = generic.group(1);
-            }
-            if (secret.isEmpty()) throw new Exception("配置文件中没有识别到 API Key");
-            if (!endpoint.startsWith("https://")) throw new Exception("API 地址必须使用 HTTPS");
-            secrets.set(secret);
-            getSharedPreferences("config", 0)
-                .edit()
-                .putString("base", endpoint.replaceAll("/+$", ""))
-                .commit();
-            status = "配置已导入，密钥已加密保存";
-            settings();
-            toast(status);
-          }
           if (request == 103) {
             Uri uri = data.getData();
             runJob(
@@ -2731,6 +3135,7 @@ public final class MainActivity extends Activity {
 
   @Override
   protected void onPause() {
+    if (itemAudioEditor != null) itemAudioEditor.pause();
     setApiKeyVisible(false);
     if (page.equals("quiz")) pauseClock();
     super.onPause();
@@ -2741,6 +3146,8 @@ public final class MainActivity extends Activity {
   protected void onStop() {
     super.onStop();
     if (parent && !externalPending) {
+      if (itemAudioEditor != null && itemAudioEditor.dialog != null)
+        itemAudioEditor.dialog.dismiss();
       parent = false;
       relock = true;
     }
@@ -2757,10 +3164,30 @@ public final class MainActivity extends Activity {
 
   @Override
   protected void onDestroy() {
+    if (itemAudioEditor != null) itemAudioEditor.close();
     if (lastToast != null) lastToast.cancel();
     if (audio != null) audio.close();
+    if (voicePreview != null) voicePreview.delete();
     jobs.shutdownNow();
     super.onDestroy();
+  }
+
+  void requestMicrophone(ItemAudioEditor editor) {
+    if (!parent || itemAudioEditor != editor || editor.closed) return;
+    externalPending = true;
+    requestPermissions(new String[] {android.Manifest.permission.RECORD_AUDIO}, 201);
+  }
+
+  @Override
+  public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+    super.onRequestPermissionsResult(request, permissions, results);
+    if (request != 201) return;
+    externalPending = false;
+    ItemAudioEditor editor = itemAudioEditor;
+    if (editor == null || editor.closed || !parent) return;
+    if (results.length > 0 && results[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
+      editor.startRecording();
+    else editor.status.setText("未获得麦克风权限，可重新生成音频，或允许录音后重试。原音频保留。");
   }
 
   static final class ContentScrollView extends ScrollView {

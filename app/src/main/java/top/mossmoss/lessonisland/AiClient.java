@@ -16,13 +16,22 @@ final class AiClient {
 
   final Context context;
   final Secrets secrets;
+  final ServiceConfig settings;
 
   AiClient(Context c) {
     context = c;
     secrets = new Secrets(c);
+    settings = null;
+  }
+
+  AiClient(Context c, ServiceConfig settings) {
+    context = c;
+    secrets = new Secrets(c);
+    this.settings = settings;
   }
 
   String base() {
+    if (settings != null) return settings.base;
     return context
         .getSharedPreferences("config", 0)
         .getString("base", "https://api.xiaomimimo.com/v1")
@@ -30,12 +39,13 @@ final class AiClient {
   }
 
   String model() {
+    if (settings != null) return settings.model;
     return context.getSharedPreferences("config", 0).getString("model", "mimo-v2.6-flash");
   }
 
   JSONObject request(JSONObject body) throws Exception {
-    String secret = secrets.get();
-    if (secret.isEmpty()) throw new Exception("请先在家长设置中导入 API 配置");
+    String secret = settings == null ? secrets.get() : settings.key;
+    if (secret.isEmpty()) throw new Exception("请先在家长设置中填写 API 密钥");
     URL url = new URL(base() + "/chat/completions");
     if (!url.getProtocol().equals("https")) throw new Exception("API 地址必须使用 HTTPS");
     HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
@@ -115,11 +125,14 @@ final class AiClient {
     int start = text.indexOf('{'), end = text.lastIndexOf('}');
     if (start < 0 || end < start) throw new Exception("模型未返回可用素材，请重试");
     JSONObject course = new JSONObject(text.substring(start, end + 1));
+    String courseId = "course_" + UUID.randomUUID().toString().replace("-", "");
     course
-        .put("id", "course_" + UUID.randomUUID().toString().replace("-", ""))
+        .put("id", courseId)
+        .put("lessonId", courseId)
         .put("createdAt", System.currentTimeMillis())
         .put("published", false)
         .put("reviewed", false);
+    course.remove("publishedAt");
     if (!title.trim().isEmpty()) course.put("title", title.trim());
     JSONArray sources = new JSONArray();
     for (File file : images) sources.put("images/" + file.getName());
@@ -129,24 +142,8 @@ final class AiClient {
   }
 
   byte[] speech(String text) throws Exception {
-    JSONObject result =
-        request(
-            new JSONObject()
-                .put(
-                    "model",
-                    context.getSharedPreferences("config", 0).getString("tts", "mimo-v2.5-tts"))
-                .put(
-                    "messages",
-                    new JSONArray()
-                        .put(
-                            new JSONObject()
-                                .put("role", "user")
-                                .put(
-                                    "content",
-                                    "Read the exact English text clearly, slowly and naturally for"
-                                        + " a child learning English. Do not add words."))
-                        .put(new JSONObject().put("role", "assistant").put("content", text)))
-                .put("audio", new JSONObject().put("format", "mp3").put("voice", "Mia")));
+    ServiceConfig config = settings == null ? ServiceConfig.load(context) : settings;
+    JSONObject result = request(speechRequest(text, config));
     byte[] audio =
         Base64.decode(
             result
@@ -158,5 +155,25 @@ final class AiClient {
             Base64.DEFAULT);
     if (audio.length < 200) throw new Exception("音频内容为空，请重试");
     return audio;
+  }
+
+  static JSONObject speechRequest(String text, ServiceConfig config) throws Exception {
+    if (text.trim().isEmpty()) throw new Exception("请先填写需要朗读的英文");
+    if (config.tts.endsWith("-voiceclone")) throw new Exception("请选择标准 TTS 模型；本页的直接录音无需语音克隆模型");
+    JSONObject body =
+        new JSONObject()
+            .put("model", config.tts)
+            .put(
+                "messages",
+                new JSONArray()
+                    .put(
+                        new JSONObject()
+                            .put("role", "user")
+                            .put("content", config.speechInstruction()))
+                    .put(new JSONObject().put("role", "assistant").put("content", text)))
+            .put("audio", new JSONObject().put("format", "mp3"));
+    if (config.tts.endsWith("-voicedesign")) throw new Exception("预置音色请选择 mimo-v2.5-tts 或兼容标准语音模型");
+    body.getJSONObject("audio").put("voice", config.voice);
+    return body;
   }
 }

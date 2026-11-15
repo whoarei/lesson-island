@@ -39,6 +39,7 @@ public final class Learning {
 
   public static final class Question {
     public String id, type, prompt, answer, explanation, audio;
+    public String audioFile = "";
     public List<String> options = new ArrayList<>();
 
     public Question(
@@ -49,6 +50,11 @@ public final class Learning {
       this.answer = answer;
       this.explanation = explanation;
       this.audio = audio;
+    }
+
+    public Question withAudioFile(String file) {
+      audioFile = file;
+      return this;
     }
   }
 }

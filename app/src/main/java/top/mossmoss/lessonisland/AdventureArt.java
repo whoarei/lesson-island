@@ -199,6 +199,30 @@ final class AdventureArt {
         c.drawRoundRect(22, 29, 26, 36, 2, 2, p);
       }
       case "check" -> line(c, p, color, 6, 11, 24, 20, 33, 37, 15);
+      case "download", "download_done" -> {
+        line(c, p, color, 4, 24, 6, 24, 29);
+        line(c, p, color, 4, 14, 20, 24, 30, 34, 20);
+        line(c, p, color, 4, 7, 32, 7, 40, 41, 40, 41, 32);
+        if (kind.equals("download_done")) {
+          p.setColor(color);
+          c.drawCircle(38, 10, 9, p);
+          line(c, p, Color.WHITE, 2.5f, 33, 10, 37, 14, 43, 7);
+        }
+      }
+      case "publish" -> {
+        Path plane = new Path();
+        plane.moveTo(5, 20);
+        plane.lineTo(42, 5);
+        plane.lineTo(30, 43);
+        plane.lineTo(22, 28);
+        plane.close();
+        c.drawPath(plane, p);
+        line(c, p, Color.WHITE, 2.5f, 23, 26, 36, 12);
+      }
+      case "published" -> {
+        c.drawCircle(24, 24, 19, p);
+        line(c, p, Color.WHITE, 4, 13, 24, 21, 32, 35, 17);
+      }
       case "settings" -> {
         for (int i = 0; i < 8; i++) {
           c.save();
@@ -211,6 +235,57 @@ final class AdventureArt {
         c.drawCircle(24, 24, 6, p);
       }
       default -> star(c, p, 24, 24, 19, color);
+    }
+  }
+
+  static final class Symbol extends Drawable {
+    final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    final String kind;
+    final int color;
+    int alpha = 255;
+
+    Symbol(String kind, int color) {
+      this.kind = kind;
+      this.color = color;
+    }
+
+    @Override
+    public void draw(Canvas c) {
+      Rect bounds = getBounds();
+      float s = Math.min(bounds.width(), bounds.height()) / 48f;
+      int layer = c.saveLayerAlpha(bounds.left, bounds.top, bounds.right, bounds.bottom, alpha);
+      c.translate(
+          bounds.left + (bounds.width() - s * 48) / 2, bounds.top + (bounds.height() - s * 48) / 2);
+      c.scale(s, s);
+      icon(c, paint, kind, color);
+      c.restoreToCount(layer);
+    }
+
+    @Override
+    public int getIntrinsicWidth() {
+      return 48;
+    }
+
+    @Override
+    public int getIntrinsicHeight() {
+      return 48;
+    }
+
+    @Override
+    public void setAlpha(int value) {
+      alpha = value;
+      invalidateSelf();
+    }
+
+    @Override
+    public void setColorFilter(ColorFilter filter) {
+      paint.setColorFilter(filter);
+      invalidateSelf();
+    }
+
+    @Override
+    public int getOpacity() {
+      return PixelFormat.TRANSLUCENT;
     }
   }
 

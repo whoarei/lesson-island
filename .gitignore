@@ -8,6 +8,7 @@ llm info.txt
 test-results/private-*
 tools/local-*
 .local/
+.codex-remote-attachments/
 signing.properties
 keystore.properties
 .idea/

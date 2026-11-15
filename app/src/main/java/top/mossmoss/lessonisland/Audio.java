@@ -16,6 +16,7 @@ final class Audio {
   final AiClient ai;
   final ExecutorService worker = Executors.newSingleThreadExecutor();
   private MediaPlayer player;
+  private boolean playerPrepared;
   private TextToSpeech tts;
   private volatile boolean ready;
   private float speed = 1f;
@@ -41,12 +42,49 @@ final class Audio {
   }
 
   List<String> texts(JSONObject course) throws Exception {
-    Set<String> set = new LinkedHashSet<>();
+    List<String> texts = new ArrayList<>();
+    for (Clip clip : clips(course)) texts.add(clip.text);
+    return texts;
+  }
+
+  static String itemFile(JSONObject item) {
+    return item.optString("audioText").equals(item.optString("en"))
+        ? item.optString("audioFile")
+        : "";
+  }
+
+  static boolean validRef(String ref) {
+    return ref.matches("audio/[a-f0-9]{64}\\.(mp3|wav|m4a)");
+  }
+
+  static final class Clip {
+    final String text, ref;
+    final File preview;
+
+    Clip(String text, String ref) {
+      this.text = text;
+      this.ref = ref;
+      preview = null;
+    }
+
+    Clip(File preview) {
+      this.preview = preview;
+      text = "";
+      ref = "";
+    }
+  }
+
+  List<Clip> clips(JSONObject course) throws Exception {
+    Map<String, Clip> set = new LinkedHashMap<>();
     for (String name : new String[] {"sentences", "vocabulary"}) {
       JSONArray a = course.getJSONArray(name);
-      for (int i = 0; i < a.length(); i++) set.add(a.getJSONObject(i).getString("en"));
+      for (int i = 0; i < a.length(); i++) {
+        JSONObject item = a.getJSONObject(i);
+        String text = item.getString("en"), ref = itemFile(item);
+        set.put(ref.isEmpty() ? "text:" + text : ref, new Clip(text, ref));
+      }
     }
-    return new ArrayList<>(set);
+    return new ArrayList<>(set.values());
   }
 
   boolean exists(String text) {
@@ -57,7 +95,7 @@ final class Audio {
 
   int cached(JSONObject c) throws Exception {
     int n = 0;
-    for (String text : texts(c)) if (exists(text)) n++;
+    for (Clip clip : clips(c)) if (local(clip.text, clip.ref) != null) n++;
     return n;
   }
 
@@ -67,15 +105,71 @@ final class Audio {
     return file.length() > 200 ? file : null;
   }
 
+  synchronized File local(String text, String ref) throws Exception {
+    if (ref == null || ref.isEmpty()) return local(text);
+    if (!validRef(ref)) throw new Exception("素材音频路径无效");
+    File file = new File(store.root, ref);
+    return file.length() > 200 ? file : null;
+  }
+
+  static void validateClip(File file) throws Exception {
+    if (file == null || file.length() < 200) throw new Exception("录音过短或音频为空，请重试");
+    MediaMetadataRetriever reader = new MediaMetadataRetriever();
+    try {
+      reader.setDataSource(file.getAbsolutePath());
+      String duration = reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+      if (duration == null || Long.parseLong(duration) < 150) throw new Exception("录音过短，请重新录制");
+    } catch (Exception e) {
+      throw new Exception("音频不可用或录音过短，请重新生成或录制");
+    } finally {
+      reader.release();
+    }
+  }
+
+  File generate(String text, ServiceConfig config) throws Exception {
+    byte[] bytes = new AiClient(context, config).speech(text);
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+    File file = File.createTempFile("speech_", ".mp3", context.getCacheDir());
+    try {
+      java.nio.file.Files.write(file.toPath(), bytes);
+      validateClip(file);
+      return file;
+    } catch (Exception e) {
+      file.delete();
+      throw e;
+    }
+  }
+
+  String installClip(File source) throws Exception {
+    validateClip(source);
+    String ext =
+        source.getName().endsWith(".m4a")
+            ? ".m4a"
+            : source.getName().endsWith(".wav") ? ".wav" : ".mp3";
+    String ref = "audio/" + Store.hash(UUID.randomUUID().toString()) + ext;
+    android.util.AtomicFile atomic = new android.util.AtomicFile(new File(store.root, ref));
+    FileOutputStream out = atomic.startWrite();
+    try {
+      java.nio.file.Files.copy(source.toPath(), out);
+      atomic.finishWrite(out);
+    } catch (Exception e) {
+      atomic.failWrite(out);
+      throw e;
+    }
+    return ref;
+  }
+
   void download(JSONObject course, AiClient.Progress progress) throws Exception {
-    List<String> texts = texts(course);
+    List<Clip> clips = clips(course);
     int n = 0;
-    for (String text : texts) {
+    for (Clip clip : clips) {
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
-      if (!exists(text)) {
-        byte[] data = ai.speech(text);
+      if (local(clip.text, clip.ref) == null) {
+        if (!clip.ref.isEmpty()) throw new Exception("有一条自定义音频缺失，请在校对素材中重新生成或录制");
+        byte[] data = ai.speech(clip.text);
         android.util.AtomicFile f =
-            new android.util.AtomicFile(new File(store.root, "audio/" + Store.hash(text) + ".mp3"));
+            new android.util.AtomicFile(
+                new File(store.root, "audio/" + Store.hash(clip.text) + ".mp3"));
         FileOutputStream out = f.startWrite();
         try {
           out.write(data);
@@ -86,17 +180,41 @@ final class Audio {
         }
       }
       n++;
-      progress.update("朗读音频已就绪 " + n + " / " + texts.size() + "，可离线播放");
+      progress.update("朗读音频已就绪 " + n + " / " + clips.size() + "，可离线播放");
     }
   }
 
   void setSpeed(float value) {
     speed = value;
     if (tts != null) tts.setSpeechRate(speed);
+    if (player != null && playerPrepared) {
+      try {
+        player.setPlaybackParams(new PlaybackParams().setSpeed(speed));
+      } catch (IllegalStateException ignored) {
+        // A finishing clip may already be releasing; the next clip uses the new speed.
+      }
+    }
   }
 
   void play(String text, java.util.function.Consumer<String> error) {
     playList(Collections.singletonList(text), error);
+  }
+
+  void play(String text, String ref, java.util.function.Consumer<String> error) {
+    playList(Collections.singletonList(text), Collections.singletonList(ref), 0, null, error);
+  }
+
+  void playFile(File file, java.util.function.Consumer<String> error) {
+    playFile(file, null, error);
+  }
+
+  void playFile(
+      File file,
+      java.util.function.IntConsumer listener,
+      java.util.function.Consumer<String> error) {
+    stop();
+    playbackListener = listener;
+    playAt(Collections.singletonList(new Clip(file)), 0, playbackGeneration, error);
   }
 
   void playList(List<String> items, java.util.function.Consumer<String> error) {
@@ -109,13 +227,25 @@ final class Audio {
       int start,
       java.util.function.IntConsumer listener,
       java.util.function.Consumer<String> error) {
+    playList(items, null, start, listener, error);
+  }
+
+  void playList(
+      List<String> items,
+      List<String> refs,
+      int start,
+      java.util.function.IntConsumer listener,
+      java.util.function.Consumer<String> error) {
     stop();
     int token = playbackGeneration;
     playbackListener = listener;
-    playAt(new ArrayList<>(items), start, token, error);
+    List<Clip> clips = new ArrayList<>();
+    for (int i = 0; i < items.size(); i++)
+      clips.add(new Clip(items.get(i), refs == null ? "" : refs.get(i)));
+    playAt(clips, start, token, error);
   }
 
-  void playAt(List<String> items, int index, int token, java.util.function.Consumer<String> error) {
+  void playAt(List<Clip> items, int index, int token, java.util.function.Consumer<String> error) {
     if (token != playbackGeneration) return;
     if (index < 0 || index >= items.size()) {
       stop();
@@ -124,8 +254,11 @@ final class Audio {
     activeIndex = index;
     if (playbackListener != null) playbackListener.accept(index);
     try {
-      File file = local(items.get(index));
+      Clip clip = items.get(index);
+      File file = clip.preview != null ? clip.preview : local(clip.text, clip.ref);
+      if (file == null && !clip.ref.isEmpty()) throw new Exception("素材录音缺失");
       if (file != null) {
+        playerPrepared = false;
         player = new MediaPlayer();
         player.setAudioAttributes(
             new AudioAttributes.Builder()
@@ -137,6 +270,7 @@ final class Audio {
             p -> {
               if (token != playbackGeneration || player != p) return;
               try {
+                playerPrepared = true;
                 p.setPlaybackParams(new PlaybackParams().setSpeed(speed));
                 p.start();
               } catch (Exception e) {
@@ -148,6 +282,7 @@ final class Audio {
               if (token != playbackGeneration || player != p) return;
               p.release();
               player = null;
+              playerPrepared = false;
               playAt(items, index + 1, token, error);
             });
         player.setOnErrorListener(
@@ -174,8 +309,8 @@ final class Audio {
                 if (utterance.equals(id)) main.post(() -> fail(token, error, "系统朗读失败，请重试"));
               }
             });
-        if (tts.speak(items.get(index), TextToSpeech.QUEUE_FLUSH, null, utterance)
-            == TextToSpeech.ERROR) fail(token, error, "系统朗读失败，请重试");
+        if (tts.speak(clip.text, TextToSpeech.QUEUE_FLUSH, null, utterance) == TextToSpeech.ERROR)
+          fail(token, error, "系统朗读失败，请重试");
       } else fail(token, error, "此音频尚未下载，且设备没有可用的英语语音。请让家长下载音频");
     } catch (Exception e) {
       fail(token, error, "无法播放此音频，请让家长重新下载");
@@ -190,6 +325,7 @@ final class Audio {
 
   void stop() {
     playbackGeneration++;
+    playerPrepared = false;
     if (player != null) {
       try {
         player.release();

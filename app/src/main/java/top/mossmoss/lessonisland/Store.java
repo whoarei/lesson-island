@@ -55,6 +55,7 @@ public final class Store {
         JSONObject course = new JSONObject(read(new FileInputStream(source)));
         // Only move the unchanged, previously auto-installed samples. Edited and new courses stay.
         if (id.equals(course.optString("id"))
+            && !hasCustomAudio(course)
             && fingerprints[i].equals(sampleFingerprint(course))) {
           archive.mkdirs();
           java.nio.file.Files.move(
@@ -72,6 +73,15 @@ public final class Store {
     }
     state.put("legacySamplesArchived", true);
     save();
+  }
+
+  private static boolean hasCustomAudio(JSONObject course) throws Exception {
+    for (String section : new String[] {"sentences", "vocabulary"}) {
+      JSONArray items = course.getJSONArray(section);
+      for (int i = 0; i < items.length(); i++)
+        if (!items.getJSONObject(i).optString("audioFile").isEmpty()) return true;
+    }
+    return false;
   }
 
   private static String sampleFingerprint(JSONObject course) throws Exception {
@@ -147,7 +157,7 @@ public final class Store {
     if (files != null)
       for (File f : files)
         if (f.getName().endsWith(".json")) {
-          JSONObject c = new JSONObject(read(new FileInputStream(f)));
+          JSONObject c = publication(new JSONObject(read(new FileInputStream(f))));
           if (!publishedOnly || c.optBoolean("published")) result.add(c);
         }
     result.sort(Comparator.comparingLong(c -> c.optLong("createdAt")));
@@ -155,13 +165,138 @@ public final class Store {
   }
 
   synchronized JSONObject course(String id) throws Exception {
-    return new JSONObject(
-        read(new FileInputStream(new File(root, "courses/" + safe(id) + ".json"))));
+    return publication(
+        new JSONObject(read(new FileInputStream(new File(root, "courses/" + safe(id) + ".json")))));
   }
 
   synchronized void saveCourse(JSONObject course) throws Exception {
     validate(course, false);
     write(new File(root, "courses/" + safe(course.getString("id")) + ".json"), course.toString());
+  }
+
+  synchronized void saveDraft(JSONObject draft) throws Exception {
+    if (!isDraft(course(draft.getString("id")))) throw new Exception("草稿状态已变化，请重新打开编辑");
+    saveCourse(draft);
+  }
+
+  static String lessonId(JSONObject course) {
+    return safe(course.optString("lessonId", course.optString("id")));
+  }
+
+  private JSONObject publication(JSONObject course) throws Exception {
+    JSONObject published = state.optJSONObject("publishedLessons");
+    if (published != null && published.has(lessonId(course))) {
+      boolean active = course.getString("id").equals(published.optString(lessonId(course)));
+      course.put("published", active);
+      if (active) course.put("reviewed", true);
+    }
+    JSONObject history = state.optJSONObject("publishedCourses");
+    if (history != null && history.has(course.getString("id")))
+      course.put("publishedAt", history.getLong(course.getString("id")));
+    return course;
+  }
+
+  synchronized List<JSONObject> versions(JSONObject course) throws Exception {
+    String lesson = lessonId(course);
+    List<JSONObject> result = new ArrayList<>();
+    for (JSONObject candidate : courses(false))
+      if (lesson.equals(lessonId(candidate))) result.add(candidate);
+    result.sort(
+        Comparator.comparingLong((JSONObject c) -> c.optLong("createdAt"))
+            .reversed()
+            .thenComparing(c -> c.optString("id")));
+    return result;
+  }
+
+  synchronized boolean hasLearningRecord(String id) throws Exception {
+    JSONObject progress = state.getJSONObject("progress").optJSONObject(id);
+    if (progress != null && (progress.optInt("attempted") > 0 || progress.optInt("completed") > 0))
+      return true;
+    JSONArray history = state.getJSONArray("history");
+    for (int i = 0; i < history.length(); i++)
+      if (id.equals(history.getJSONObject(i).optString("course"))) return true;
+    JSONObject reviews = state.getJSONObject("reviews");
+    for (Iterator<String> keys = reviews.keys(); keys.hasNext(); )
+      if (id.equals(reviews.getJSONObject(keys.next()).optString("course"))) return true;
+    JSONObject session = state.optJSONObject("session");
+    return session != null && id.equals(session.optString("course"));
+  }
+
+  boolean wasPublished(JSONObject course) {
+    JSONObject history = state.optJSONObject("publishedCourses");
+    return course.optBoolean("published")
+        || course.optLong("publishedAt") > 0
+        || (history != null && history.has(course.optString("id")));
+  }
+
+  synchronized boolean isDraft(JSONObject course) throws Exception {
+    return !wasPublished(course) && !hasLearningRecord(course.getString("id"));
+  }
+
+  static String draftName(JSONObject course) {
+    if (course.optLong("createdAt") <= 0) return "草稿（创建时间未知）";
+    return "草稿 "
+        + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.CHINA)
+            .format(new Date(course.optLong("createdAt")));
+  }
+
+  synchronized JSONObject newDraft(String sourceId) throws Exception {
+    JSONObject source = course(sourceId), draft = copy(source);
+    long created = System.currentTimeMillis();
+    Set<Long> usedTimes = new HashSet<>();
+    for (JSONObject version : versions(source)) usedTimes.add(version.optLong("createdAt"));
+    while (usedTimes.contains(created)) created++;
+    draft
+        .put("id", "course_" + UUID.randomUUID().toString().replace("-", ""))
+        .put("lessonId", lessonId(source))
+        .put("createdAt", created)
+        .put("published", false)
+        .put("reviewed", false);
+    draft.remove("publishedAt");
+    saveCourse(draft);
+    return draft;
+  }
+
+  synchronized JSONObject editableDraft(String id) throws Exception {
+    JSONObject current = course(id);
+    return isDraft(current) ? current : newDraft(id);
+  }
+
+  /** The one current publication and its history switch in a single AtomicFile state commit. */
+  synchronized void setPublished(String id, boolean active) throws Exception {
+    JSONObject current = course(id);
+    if (active) validate(current, true);
+    else if (!current.optBoolean("published")) throw new Exception("当前版本已经下架，请重新打开课文");
+    JSONObject next = copy(state);
+    JSONObject published = next.optJSONObject("publishedLessons"),
+        history = next.optJSONObject("publishedCourses");
+    if (published == null) {
+      published = new JSONObject();
+      next.put("publishedLessons", published);
+    }
+    if (history == null) {
+      history = new JSONObject();
+      next.put("publishedCourses", history);
+    }
+    long now = System.currentTimeMillis();
+    for (JSONObject version : versions(current))
+      if (wasPublished(version) && !history.has(version.getString("id")))
+        history.put(
+            version.getString("id"),
+            Math.max(1, version.optLong("publishedAt", version.optLong("createdAt", now))));
+    if (active && !history.has(id)) history.put(id, now);
+    published.put(lessonId(current), active ? id : "");
+    write(new File(root, "state.json"), next.toString());
+    state = next;
+  }
+
+  synchronized void deleteDraft(String id) throws Exception {
+    JSONObject current = course(id);
+    if (!isDraft(current)) throw new Exception("只能删除未发布且没有学习记录的草稿");
+    // Copies share original images and audio. Removing one draft must never remove those files.
+    AtomicFile file = new AtomicFile(new File(root, "courses/" + safe(id) + ".json"));
+    file.delete();
+    if (file.getBaseFile().exists()) throw new IOException("草稿未删除，请重试");
   }
 
   static String safe(String value) {
@@ -187,6 +322,7 @@ public final class Store {
 
   static void validate(JSONObject c, boolean publish) throws Exception {
     safe(c.getString("id"));
+    if (c.has("lessonId")) safe(c.getString("lessonId"));
     if (c.optString("title").trim().isEmpty()) throw new Exception("请填写课文标题");
     JSONArray sentences = c.getJSONArray("sentences"), vocab = c.getJSONArray("vocabulary");
     if (sentences.length() == 0) throw new Exception("请至少保留一个课文句子");
@@ -194,12 +330,14 @@ public final class Store {
       throw new Exception("单课最多 250 句和 250 个重点素材");
     for (int i = 0; i < sentences.length(); i++) {
       JSONObject s = sentences.getJSONObject(i);
+      validateAudio(s);
       if (s.optString("en").trim().isEmpty()) throw new Exception("课文英文不能为空");
       if (publish && s.optString("zh").trim().isEmpty()) throw new Exception("请补全每句话的中文翻译");
     }
     Set<String> kinds = new HashSet<>();
     for (int i = 0; i < vocab.length(); i++) {
       JSONObject v = vocab.getJSONObject(i);
+      validateAudio(v);
       if (v.optString("en").trim().isEmpty()) throw new Exception("重点素材英文不能为空");
       if (!Arrays.asList("word", "phrase", "sentence").contains(v.optString("kind")))
         throw new Exception("素材类型应为 word、phrase 或 sentence");
@@ -237,6 +375,13 @@ public final class Store {
     return p;
   }
 
+  static void validateAudio(JSONObject item) throws Exception {
+    String ref = item.optString("audioFile");
+    if (!ref.isEmpty()
+        && (!Audio.validRef(ref) || !item.optString("audioText").equals(item.optString("en"))))
+      throw new Exception("素材音频与英文不匹配或路径无效，请重新生成或录制");
+  }
+
   List<Learning.Question> questions(JSONObject c, int stage) throws Exception {
     List<Learning.Question> result = new ArrayList<>();
     JSONArray sentences = c.getJSONArray("sentences"), vocab = c.getJSONArray("vocabulary");
@@ -245,12 +390,13 @@ public final class Store {
         JSONObject s = sentences.getJSONObject(i);
         result.add(
             new Learning.Question(
-                "s" + i,
-                "read",
-                s.getString("en"),
-                s.getString("zh"),
-                s.getString("zh"),
-                s.getString("en")));
+                    "s" + i,
+                    "read",
+                    s.getString("en"),
+                    s.getString("zh"),
+                    s.getString("zh"),
+                    s.getString("en"))
+                .withAudioFile(Audio.itemFile(s)));
       }
       return result;
     }
@@ -263,12 +409,13 @@ public final class Store {
         JSONObject v = pool.get(i);
         Learning.Question q =
             new Learning.Question(
-                "v" + i,
-                "choice",
-                v.getString("en"),
-                v.getString("zh"),
-                v.optString("note"),
-                v.getString("en"));
+                    "v" + i,
+                    "choice",
+                    v.getString("en"),
+                    v.getString("zh"),
+                    v.optString("note"),
+                    v.getString("en"))
+                .withAudioFile(Audio.itemFile(v));
         q.options = choices(v.getString("zh"), pool);
         if (q.options.size() < 2) q.type = "flash";
         result.add(q);
@@ -282,12 +429,13 @@ public final class Store {
         JSONObject s = pool.get(i);
         Learning.Question q =
             new Learning.Question(
-                "l" + i,
-                "listen",
-                "听一听，选择这句话的意思",
-                s.getString("zh"),
-                s.getString("en"),
-                s.getString("en"));
+                    "l" + i,
+                    "listen",
+                    "听一听，选择这句话的意思",
+                    s.getString("zh"),
+                    s.getString("en"),
+                    s.getString("en"))
+                .withAudioFile(Audio.itemFile(s));
         q.options = choices(s.getString("zh"), pool);
         if (q.options.size() < 2) q.type = "dictation";
         if (q.type.equals("dictation")) q.answer = s.getString("en");
@@ -301,24 +449,26 @@ public final class Store {
         if (v.optString("kind").equals("word"))
           result.add(
               new Learning.Question(
-                  "d" + i,
-                  "dictation",
-                  "听音拼写这个单词",
-                  v.getString("en"),
-                  v.getString("zh"),
-                  v.getString("en")));
+                      "d" + i,
+                      "dictation",
+                      "听音拼写这个单词",
+                      v.getString("en"),
+                      v.getString("zh"),
+                      v.getString("en"))
+                  .withAudioFile(Audio.itemFile(v)));
       }
       for (int i = 0; i < sentences.length(); i++) {
         JSONObject s = sentences.getJSONObject(i);
         if (Learning.tokens(s.getString("en")).size() > 1)
           result.add(
               new Learning.Question(
-                  "o" + i,
-                  "order",
-                  s.getString("zh"),
-                  s.getString("en"),
-                  s.getString("zh"),
-                  s.getString("en")));
+                      "o" + i,
+                      "order",
+                      s.getString("zh"),
+                      s.getString("en"),
+                      s.getString("zh"),
+                      s.getString("en"))
+                  .withAudioFile(Audio.itemFile(s)));
       }
       return result;
     }
@@ -355,6 +505,13 @@ public final class Store {
     return options;
   }
 
+  synchronized void recordReading(String courseId, int sentences) throws Exception {
+    JSONObject p = progress(courseId);
+    p.put("attempted", p.optInt("attempted") + sentences);
+    p.put("correct", p.optInt("correct") + sentences);
+    save();
+  }
+
   synchronized void record(String courseId, Learning.Question q, boolean correct, boolean first)
       throws Exception {
     JSONObject p = progress(courseId);
@@ -372,6 +529,7 @@ public final class Store {
                 .put("answer", q.answer)
                 .put("prompt", q.prompt)
                 .put("audio", q.audio)
+                .put("audioFile", q.audioFile)
                 .put("type", q.type)
                 .put("explanation", q.explanation)
                 .put("options", new JSONArray(q.options))
@@ -455,7 +613,7 @@ public final class Store {
       File[] audio = new File(root, "audio").listFiles();
       if (audio != null)
         for (File f : audio)
-          if (f.getName().matches("[a-f0-9]{64}\\.(mp3|wav)"))
+          if (f.getName().matches("[a-f0-9]{64}\\.(mp3|wav|m4a)"))
             add(zip, "audio/" + f.getName(), java.nio.file.Files.readAllBytes(f.toPath()));
     }
   }
@@ -464,6 +622,62 @@ public final class Store {
     zip.putNextEntry(new ZipEntry(name));
     zip.write(bytes);
     zip.closeEntry();
+  }
+
+  private void mergePublications(JSONObject incoming, List<JSONObject> imported) throws Exception {
+    for (String field : new String[] {"publishedLessons", "publishedCourses"})
+      if (incoming.has(field) && !(incoming.get(field) instanceof JSONObject))
+        throw new Exception("备份中的课文版本信息无效");
+    JSONObject active = incoming.optJSONObject("publishedLessons"),
+        history = incoming.optJSONObject("publishedCourses");
+    if (active == null) active = new JSONObject();
+    if (history == null) history = new JSONObject();
+    Map<String, JSONObject> available = new HashMap<>();
+    for (JSONObject c : courses(false)) available.put(c.getString("id"), c);
+    Set<String> families = new HashSet<>();
+    Map<String, String> legacyActive = new HashMap<>();
+    for (JSONObject c : imported) {
+      available.put(c.getString("id"), c);
+      String family = lessonId(c);
+      families.add(family);
+      if (c.optBoolean("published")) {
+        if (legacyActive.put(family, c.getString("id")) != null && !active.has(family))
+          throw new Exception("同一课文包含多个已发布版本");
+      }
+    }
+    JSONObject existingActive = state.optJSONObject("publishedLessons");
+    if (existingActive != null)
+      for (Iterator<String> keys = existingActive.keys(); keys.hasNext(); ) {
+        String family = keys.next();
+        if (!families.contains(family) && !active.has(family))
+          active.put(family, existingActive.getString(family));
+      }
+    for (String family : families)
+      if (!active.has(family)) active.put(family, legacyActive.getOrDefault(family, ""));
+    for (Iterator<String> keys = active.keys(); keys.hasNext(); ) {
+      String family = safe(keys.next());
+      if (!(active.get(family) instanceof String)) throw new Exception("备份中的发布版本无效");
+      String id = active.getString(family);
+      if (!id.isEmpty()) {
+        safe(id);
+        JSONObject selected = available.get(id);
+        if (selected == null || !family.equals(lessonId(selected)))
+          throw new Exception("发布版本不属于这篇课文");
+      }
+    }
+    JSONObject existingHistory = state.optJSONObject("publishedCourses");
+    if (existingHistory != null)
+      for (Iterator<String> keys = existingHistory.keys(); keys.hasNext(); ) {
+        String id = keys.next();
+        if (!history.has(id)) history.put(id, existingHistory.getLong(id));
+      }
+    for (Iterator<String> keys = history.keys(); keys.hasNext(); ) {
+      String id = safe(keys.next());
+      Object time = history.get(id);
+      if (!(time instanceof Number) || ((Number) time).longValue() <= 0)
+        throw new Exception("备份中的发布时间无效");
+    }
+    incoming.put("publishedLessons", active).put("publishedCourses", history);
   }
 
   synchronized void importZip(InputStream stream) throws Exception {
@@ -477,7 +691,7 @@ public final class Store {
         String n = e.getName();
         if (e.isDirectory()) continue;
         if (!n.matches(
-            "state\\.json|courses/[A-Za-z0-9_-]+\\.json|audio/[a-f0-9]{64}\\.(mp3|wav)|images/[A-Za-z0-9_.-]+\\.(jpg|png)"))
+            "state\\.json|courses/[A-Za-z0-9_-]+\\.json|audio/[a-f0-9]{64}\\.(mp3|wav|m4a)|images/[A-Za-z0-9_.-]+\\.(jpg|png)"))
           throw new Exception("备份含无效文件路径");
         ByteArrayOutputStream b = new ByteArrayOutputStream();
         byte[] block = new byte[8192];
@@ -518,6 +732,24 @@ public final class Store {
           throw new Exception("课程编号不匹配");
         cs.add(c);
       }
+    mergePublications(incoming, cs);
+    for (JSONObject c : cs)
+      for (String array : new String[] {"sentences", "vocabulary"}) {
+        JSONArray items = c.getJSONArray(array);
+        for (int i = 0; i < items.length(); i++) {
+          String ref = Audio.itemFile(items.getJSONObject(i));
+          if (!ref.isEmpty() && !files.containsKey(ref) && !new File(root, ref).isFile())
+            throw new Exception("备份缺少素材录音，未导入任何数据");
+        }
+      }
+    JSONObject incomingReviews = incoming.getJSONObject("reviews");
+    Iterator<String> reviewKeys = incomingReviews.keys();
+    while (reviewKeys.hasNext()) {
+      String ref = incomingReviews.getJSONObject(reviewKeys.next()).optString("audioFile");
+      if (!ref.isEmpty()
+          && (!Audio.validRef(ref) || (!files.containsKey(ref) && !new File(root, ref).isFile())))
+        throw new Exception("备份中的复习录音无效或缺失");
+    }
     files.put("state.json", incoming.toString().getBytes(StandardCharsets.UTF_8));
     File backup = new File(root, "restore-backup");
     JSONArray journal = new JSONArray();
@@ -564,7 +796,7 @@ public final class Store {
       JSONObject entry = journal.getJSONObject(i);
       String name = entry.getString("path");
       if (!name.matches(
-          "state\\.json|courses/[A-Za-z0-9_-]+\\.json|audio/[a-f0-9]{64}\\.(mp3|wav)|images/[A-Za-z0-9_.-]+\\.(jpg|png)"))
+          "state\\.json|courses/[A-Za-z0-9_-]+\\.json|audio/[a-f0-9]{64}\\.(mp3|wav|m4a)|images/[A-Za-z0-9_.-]+\\.(jpg|png)"))
         throw new IOException("恢复日志路径无效");
       File target = new File(root, name);
       new AtomicFile(target).delete();

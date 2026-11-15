@@ -3,4 +3,9 @@
     <string name="material_playback_status" translatable="false">正在朗读 %1$d / %2$d · %3$s</string>
     <string name="material_stop_hint" translatable="false">轻点停止</string>
     <string name="material_browse_stop_hint" translatable="false">自由浏览，轻点停止</string>
+    <string name="audio_edit_failed" translatable="false">未替换音频：%1$s</string>
+    <string name="quiz_option_correct" translatable="false">✓\u0020\u0020%1$s</string>
+    <string name="quiz_option_wrong" translatable="false">✕\u0020\u0020%1$s</string>
+    <string name="reading_speed" translatable="false">%1$.2f×</string>
+    <string name="reading_speed_stop" translatable="false">■\u0020%1$.2f×</string>
 </resources>
