@@ -27,7 +27,7 @@ Android 包名：top.mossmoss.lessonisland
 工程中的示例素材仅供调试，不随正式应用安装。升级后会自动归档原先误导入且未修改的示例课程，自建课程及其进度会保留。
 
 新的课程制作需要联网，已下载课程可离线学习。API 密钥在本机加密保存，不在 APK、课程素材或源码包中。
-完整构建、测试和维护说明见项目 README.md。
+项目简介与界面截图见 README.md；构建、测试和维护说明见 docs/development.md。
 
 旧版包名 com.textisland.app 与新版属于不同应用。如有旧版学习数据，请先从旧版导出 ZIP 备份，再导入新版。API 配置与家长 PIN 需重新设置。
 
